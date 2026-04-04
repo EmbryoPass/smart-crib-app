@@ -432,8 +432,6 @@ const s = StyleSheet.create({
   alertaCard:   { borderRadius: 12, borderWidth: 1, padding: 14, gap: 4 },
   alertaTipo:   { fontSize: 14, fontWeight: '600' },
   alertaDetalle:{ fontSize: 12 },
-
-  // Estado vacío
   emptyState:   { alignItems: 'center', paddingVertical: 40 },
   emptyText:    { fontSize: 13 },
 });
