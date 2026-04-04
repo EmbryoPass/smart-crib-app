@@ -1,0 +1,18 @@
+Starting project at C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app
+
+Expo Metro config:
+- Version: 54.0.14
+- Extensions: ts, tsx, mjs, js, jsx, json, cjs, scss, sass, css
+- React Native: C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\node_modules\react-native
+- Watch Folders: 
+- Node Module Paths: 
+- Sass: null
+- Reanimated: null
+- Worklets: null
+- Babel Runtime: null
+
+Starting Metro Bundler
+Tunnel connected.
+Tunnel ready.
+Waiting on http://localhost:8081
+Logs for your project will appear below.
