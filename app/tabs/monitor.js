@@ -93,7 +93,7 @@ function InfoModal({ visible, info, onClose }) {
 }
 
 // ── Pantalla principal ─────────────────────────────────────────────────────
-export default function Monitor() {
+export default function Monitor({route, navigation}) {
   const { width } = useWindowDimensions();
   const cellSize = (width - 32) / 32; // 32px de padding total, 32 celdas
   const [modoIR, setModoIR] = useState(false);
@@ -113,6 +113,17 @@ export default function Monitor() {
   const [termicoConectado, setTermicoConectado] = useState(false);
   const [ambienteConectado, setAmbienteConectado] = useState(false);
   const [historialTemp, setHistorialTemp] = useState([]);
+
+  useEffect(() => {
+    // Revisamos si el index mandó el parámetro abrirCamara
+    if (route.params?.abrirCamara) {
+      setCamaraExpandida(true); // <--- Esto abre la cámara expandida
+
+      // Limpiamos el parámetro para que no se vuelva a abrir solo 
+      // si el usuario sale y entra a la pestaña después.
+      navigation.setParams({ abrirCamara: undefined });
+    }
+  }, [route.params?.abrirCamara]);
 
   useEffect(() => {
     // ── Escuchar sensor térmico ──────────────────────────────────────
