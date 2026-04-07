@@ -1,17 +1,19 @@
+import { useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet } from 'react-native';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
-
+ 
 import Colors from './app/constants/colors';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
 import Cuna from './app/tabs/cuna';
 import Historial from './app/tabs/historial';
 import Ajustes from './app/tabs/ajustes';
-
+import InicioSesion from './app/tabs/InicioSesion';
+ 
 const Tab = createBottomTabNavigator();
-
+ 
 function IconInicio({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -22,7 +24,7 @@ function IconInicio({ color }) {
     </Svg>
   );
 }
-
+ 
 function IconMonitor({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -32,7 +34,7 @@ function IconMonitor({ color }) {
     </Svg>
   );
 }
-
+ 
 function IconCuna({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -43,7 +45,7 @@ function IconCuna({ color }) {
     </Svg>
   );
 }
-
+ 
 function IconHistorial({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -53,7 +55,7 @@ function IconHistorial({ color }) {
     </Svg>
   );
 }
-
+ 
 function IconAjustes({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -65,8 +67,16 @@ function IconAjustes({ color }) {
     </Svg>
   );
 }
-
+ 
 export default function App() {
+  const [usuario, setUsuario] = useState(null);
+ 
+  // Si no hay sesión → pantalla de auth
+  if (!usuario) {
+    return <InicioSesion onAuthSuccess={(datos) => setUsuario(datos)} />;
+  }
+ 
+  // Si hay sesión → app normal con tabs
   return (
     <NavigationContainer>
       <Tab.Navigator
@@ -107,7 +117,7 @@ export default function App() {
     </NavigationContainer>
   );
 }
-
+ 
 const styles = StyleSheet.create({
   tabBar: {
     borderTopWidth: 1,
@@ -124,3 +134,4 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
+ 
