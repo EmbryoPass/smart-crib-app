@@ -344,7 +344,7 @@ const HistorialScreen = () => {
     <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
 
       <View style={s.header}>
-        <Text style={s.title}>historial</Text>
+        <Text style={s.title}></Text>
       </View>
 
       <View style={[s.tabBar, { backgroundColor: C.card, borderColor: C.border }]}>
