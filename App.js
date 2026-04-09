@@ -5,6 +5,7 @@ import { StyleSheet } from 'react-native';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
  
 import Colors from './app/constants/colors';
+import { SensorProvider } from './app/constants/SensorContext';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
 import Cuna from './app/tabs/cuna';
@@ -78,6 +79,7 @@ export default function App() {
  
   // Si hay sesión → app normal con tabs
   return (
+  <SensorProvider> 
     <NavigationContainer>
       <Tab.Navigator
         screenOptions={{
@@ -115,6 +117,7 @@ export default function App() {
         />
       </Tab.Navigator>
     </NavigationContainer>
+  </SensorProvider> 
   );
 }
  
