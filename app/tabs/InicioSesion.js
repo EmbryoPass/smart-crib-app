@@ -1,13 +1,17 @@
-import React, { useState, useRef } from 'react';
+// app/tabs/InicioSesion.js — Capullo App
+// Flujo de autenticación conectado a Firebase Auth
+
+import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  SafeAreaView, KeyboardAvoidingView, Platform,
-  ScrollView, Animated, Dimensions,
+  SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator,
 } from 'react-native';
-
-const { width: SW } = Dimensions.get('window');
-const MASCOTA_SIZE_WELCOME = 200;
-const MASCOTA_SIZE_FORM = 150;
+import {
+  auth,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from '../constants/firebase';
 
 // ─── Paleta ────────────────────────────────────────────────────────────────
 const C = {
@@ -27,8 +31,6 @@ const C = {
 };
 
 // ─── Mascota ───────────────────────────────────────────────────────────────
-import { Image } from 'react-native';
-
 const Mascota = ({ size = 100 }) => (
   <Image
     source={require('../../assets/mascota.png')}
@@ -52,9 +54,10 @@ const Input = ({ label, placeholder, value, onChangeText, secureTextEntry, keybo
       autoCapitalize="none"
       autoCorrect={false}
     />
-    {error && <Text style={inputS.error}>{error}</Text>}
+    {error ? <Text style={inputS.error}>{error}</Text> : null}
   </View>
 );
+
 const inputS = StyleSheet.create({
   wrapper: { gap: 6 },
   label:   { fontSize: 13, color: C.textS, fontWeight: '500' },
@@ -71,44 +74,50 @@ const inputS = StyleSheet.create({
   error: { fontSize: 11, color: C.error, marginTop: 2 },
 });
 
+// ─── Traduce errores de Firebase a español ─────────────────────────────────
+const traducirError = (code) => {
+  const errores = {
+    'auth/email-already-in-use':    'Este email ya está registrado.',
+    'auth/invalid-email':           'El email no es válido.',
+    'auth/weak-password':           'La contraseña debe tener al menos 6 caracteres.',
+    'auth/user-not-found':          'No encontramos una cuenta con ese email.',
+    'auth/wrong-password':          'Contraseña incorrecta.',
+    'auth/invalid-credential':      'Email o contraseña incorrectos.',
+    'auth/too-many-requests':       'Demasiados intentos. Espera un momento.',
+    'auth/network-request-failed':  'Sin conexión. Revisa tu internet.',
+  };
+  return errores[code] ?? 'Algo salió mal. Intenta de nuevo.';
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 1: BIENVENIDA
 // ═══════════════════════════════════════════════════════════════════════════
+
 const BienvenidaScreen = ({ onCrearCuenta, onTengoCuenta }) => (
   <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
     <View style={s.bienvenidaContainer}>
 
-      {/* Destellitos decorativos */}
       <View style={s.sparkles}>
-        <Text style={[s.sparkle, { top: 0, left: 30 }]}>✦</Text>
+        <Text style={[s.sparkle, { top: 0,  left: 30 }]}>✦</Text>
         <Text style={[s.sparkle, { top: 20, right: 40, fontSize: 10 }]}>✦</Text>
-        <Text style={[s.sparkle, { top: 50, left: 60, fontSize: 8 }]}>✦</Text>
+        <Text style={[s.sparkle, { top: 50, left: 60, fontSize: 8  }]}>✦</Text>
       </View>
 
-      {/* Mascota */}
-      <Mascota size={MASCOTA_SIZE_WELCOME} />
+      <Mascota size={110} />
 
-      {/* Textos */}
       <View style={s.bienvenidaTexts}>
         <Text style={s.appName}>capullo<Text style={{ color: C.trigo }}>.</Text></Text>
-        <Text style={s.tagline}>Tu cuna inteligente,{'\n'}Tu bebé siempre seguro</Text>
+        <Text style={s.tagline}>tu cuna inteligente,{'\n'}tu bebé siempre seguro</Text>
       </View>
 
-      {/* Botones */}
       <View style={s.bienvenidaBtns}>
         <TouchableOpacity style={s.btnPrimary} onPress={onCrearCuenta} activeOpacity={0.85}>
-          <Text style={s.btnPrimaryLabel}>Crear cuenta</Text>
+          <Text style={s.btnPrimaryLabel}>crear cuenta</Text>
         </TouchableOpacity>
-
         <TouchableOpacity style={s.btnSecondary} onPress={onTengoCuenta} activeOpacity={0.85}>
-          <Text style={s.btnSecondaryLabel}>Ya tengo cuenta</Text>
+          <Text style={s.btnSecondaryLabel}>ya tengo cuenta</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Link info */}
-      <TouchableOpacity style={{ marginTop: 8 }}>
-        <Text style={s.linkText}>¿Qué es Capullo? →</Text>
-      </TouchableOpacity>
 
     </View>
   </SafeAreaView>
@@ -117,86 +126,78 @@ const BienvenidaScreen = ({ onCrearCuenta, onTengoCuenta }) => (
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 2: CREAR CUENTA
 // ═══════════════════════════════════════════════════════════════════════════
-const CrearCuentaScreen = ({ onContinuar, onIniciarSesion }) => {
-  const [nombre, setNombre]   = useState('');
-  const [email, setEmail]     = useState('');
-  const [pass, setPass]       = useState('');
-  const [errors, setErrors]   = useState({});
+
+const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
+  const [nombre, setNombre] = useState('');
+  const [email,  setEmail]  = useState('');
+  const [pass,   setPass]   = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const validar = () => {
     const e = {};
-    if (!nombre.trim())          e.nombre = 'Ingresa tu nombre';
-    if (!email.includes('@'))    e.email  = 'Email inválido';
-    if (pass.length < 6)         e.pass   = 'Mínimo 6 caracteres';
+    if (!nombre.trim())       e.nombre = 'Ingresa tu nombre.';
+    if (!email.includes('@')) e.email  = 'Email inválido.';
+    if (pass.length < 6)      e.pass   = 'Mínimo 6 caracteres.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleContinuar = () => {
+  const handleCrear = async () => {
     if (!validar()) return;
     setLoading(true);
-    // TODO: llamar a tu API de registro / Firebase Auth
-    setTimeout(() => { setLoading(false); onContinuar({ nombre, email }); }, 800);
+    setErrors({});
+    try {
+      // 1. Crear usuario en Firebase Auth
+      const credencial = await createUserWithEmailAndPassword(auth, email, pass);
+      // 2. Guardar el nombre en el perfil
+      await updateProfile(credencial.user, { displayName: nombre.trim() });
+      // 3. Pasar datos a App.js
+      onExito({ nombre: nombre.trim(), email, uid: credencial.user.uid });
+    } catch (err) {
+      setErrors({ general: traducirError(err.code) });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={s.formContainer} keyboardShouldPersistTaps="handled">
 
-          {/* Mascota pequeña */}
-          <Mascota size={MASCOTA_SIZE_FORM} />
+          <Mascota size={72} />
 
-          {/* Título */}
           <View style={s.formHeader}>
-            <Text style={s.formTitle}>Hola, ¿Cómo te llamas?</Text>
-            <Text style={s.formSubtitle}>Crea tu cuenta para empezar</Text>
+            <Text style={s.formTitle}>hola, ¿cómo te llamas?</Text>
+            <Text style={s.formSubtitle}>crea tu cuenta para empezar</Text>
           </View>
 
-          {/* Campos */}
+          {/* Error general de Firebase */}
+          {errors.general ? (
+            <View style={[s.errorBox, { backgroundColor: C.errorBg }]}>
+              <Text style={[s.errorBoxText, { color: C.error }]}>{errors.general}</Text>
+            </View>
+          ) : null}
+
           <View style={s.fields}>
-            <Input
-              label="Tu nombre"
-              placeholder="Sofía"
-              value={nombre}
-              onChangeText={setNombre}
-              error={errors.nombre}
-            />
-            <Input
-              label="Email"
-              placeholder="sofia@gmail.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              error={errors.email}
-            />
-            <Input
-              label="Contraseña"
-              placeholder="••••••••"
-              value={pass}
-              onChangeText={setPass}
-              secureTextEntry
-              error={errors.pass}
-            />
+            <Input label="tu nombre"   placeholder="Sofía"           value={nombre} onChangeText={setNombre} error={errors.nombre} />
+            <Input label="email"       placeholder="sofia@gmail.com"  value={email}  onChangeText={setEmail}  keyboardType="email-address" error={errors.email} />
+            <Input label="contraseña"  placeholder="••••••••"         value={pass}   onChangeText={setPass}   secureTextEntry error={errors.pass} />
           </View>
 
-          {/* Botón continuar */}
           <TouchableOpacity
             style={[s.btnAmarillo, loading && { opacity: 0.7 }]}
-            onPress={handleContinuar}
+            onPress={handleCrear}
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={s.btnAmarilloLabel}>
-              {loading ? 'creando cuenta...' : 'continuar →'}
-            </Text>
+            {loading
+              ? <ActivityIndicator color={C.cacao} />
+              : <Text style={s.btnAmarilloLabel}>continuar →</Text>
+            }
           </TouchableOpacity>
 
-          {/* Link login */}
           <TouchableOpacity onPress={onIniciarSesion} style={{ marginTop: 4 }}>
             <Text style={s.linkText}>¿Ya tienes cuenta? Inicia sesión</Text>
           </TouchableOpacity>
@@ -210,83 +211,78 @@ const CrearCuentaScreen = ({ onContinuar, onIniciarSesion }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 3: INICIAR SESIÓN
 // ═══════════════════════════════════════════════════════════════════════════
-const IniciarSesionScreen = ({ onEntrar, onRegistrate }) => {
-  const [email, setEmail]     = useState('');
-  const [pass, setPass]       = useState('');
-  const [errors, setErrors]   = useState({});
+
+const LoginScreen = ({ onExito, onRegistrate }) => {
+  const [email,  setEmail]  = useState('');
+  const [pass,   setPass]   = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const validar = () => {
     const e = {};
-    if (!email.includes('@')) e.email = 'Email inválido';
-    if (pass.length < 6)      e.pass  = 'Mínimo 6 caracteres';
+    if (!email.includes('@')) e.email = 'Email inválido.';
+    if (pass.length < 6)      e.pass  = 'Mínimo 6 caracteres.';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const handleEntrar = () => {
+  const handleEntrar = async () => {
     if (!validar()) return;
     setLoading(true);
-    // TODO: llamar a tu API de login / Firebase Auth
-    setTimeout(() => { setLoading(false); onEntrar({ email }); }, 800);
+    setErrors({});
+    try {
+      const credencial = await signInWithEmailAndPassword(auth, email, pass);
+      onExito({
+        nombre: credencial.user.displayName ?? email,
+        email:  credencial.user.email,
+        uid:    credencial.user.uid,
+      });
+    } catch (err) {
+      setErrors({ general: traducirError(err.code) });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
-      >
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={s.formContainer} keyboardShouldPersistTaps="handled">
 
-          {/* Mascota pequeña */}
-          <Mascota size={MASCOTA_SIZE_FORM} />
+          <Mascota size={72} />
 
-          {/* Título */}
           <View style={s.formHeader}>
             <Text style={s.formTitle}>¡bienvenida de vuelta!</Text>
             <Text style={s.formSubtitle}>tu bebé te ha estado esperando</Text>
           </View>
 
-          {/* Campos */}
+          {errors.general ? (
+            <View style={[s.errorBox, { backgroundColor: C.errorBg }]}>
+              <Text style={[s.errorBoxText, { color: C.error }]}>{errors.general}</Text>
+            </View>
+          ) : null}
+
           <View style={s.fields}>
-            <Input
-              label="email"
-              placeholder="sofia@gmail.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              error={errors.email}
-            />
-            <Input
-              label="contraseña"
-              placeholder="••••••••"
-              value={pass}
-              onChangeText={setPass}
-              secureTextEntry
-              error={errors.pass}
-            />
+            <Input label="email"      placeholder="sofia@gmail.com" value={email} onChangeText={setEmail} keyboardType="email-address" error={errors.email} />
+            <Input label="contraseña" placeholder="••••••••"        value={pass}  onChangeText={setPass}  secureTextEntry error={errors.pass} />
           </View>
 
-          {/* Olvidaste tu contraseña */}
-          <TouchableOpacity style={s.forgotBtn}>
-            {/* TODO: flujo de recuperación de contraseña */}
-            <Text style={s.forgotText}>¿Olvidaste tu contraseña?</Text>
+          <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: -6 }}>
+            <Text style={s.forgotText}>¿olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
-          {/* Botón entrar */}
           <TouchableOpacity
             style={[s.btnPrimary, loading && { opacity: 0.7 }]}
             onPress={handleEntrar}
             disabled={loading}
             activeOpacity={0.85}
           >
-            <Text style={s.btnPrimaryLabel}>
-              {loading ? 'entrando...' : 'entrar'}
-            </Text>
+            {loading
+              ? <ActivityIndicator color={C.crema} />
+              : <Text style={s.btnPrimaryLabel}>entrar</Text>
+            }
           </TouchableOpacity>
 
-          {/* Link registro */}
           <TouchableOpacity onPress={onRegistrate} style={{ marginTop: 4 }}>
             <Text style={s.linkText}>¿No tienes cuenta? Regístrate</Text>
           </TouchableOpacity>
@@ -298,156 +294,70 @@ const IniciarSesionScreen = ({ onEntrar, onRegistrate }) => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// CONTENEDOR PRINCIPAL — maneja la navegación entre pantallas
+// CONTENEDOR PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
 
-// Paso: 'bienvenida' | 'registro' | 'login'
-const InicioSesion = ({ onAuthSuccess }) => {
+export default function InicioSesion({ onAuthSuccess }) {
   const [paso, setPaso] = useState('bienvenida');
 
-  if (paso === 'bienvenida') {
-    return (
-      <BienvenidaScreen
-        onCrearCuenta={() => setPaso('registro')}
-        onTengoCuenta={() => setPaso('login')}
-      />
-    );
-  }
+  if (paso === 'bienvenida') return (
+    <BienvenidaScreen
+      onCrearCuenta={() => setPaso('registro')}
+      onTengoCuenta={() => setPaso('login')}
+    />
+  );
 
-  if (paso === 'registro') {
-    return (
-      <CrearCuentaScreen
-        onContinuar={(datos) => {
-          // TODO: guardar datos de sesión en contexto global / AsyncStorage
-          onAuthSuccess(datos);
-        }}
-        onIniciarSesion={() => setPaso('login')}
-      />
-    );
-  }
+  if (paso === 'registro') return (
+    <CrearCuentaScreen
+      onExito={onAuthSuccess}
+      onIniciarSesion={() => setPaso('login')}
+    />
+  );
 
-  if (paso === 'login') {
-    return (
-      <IniciarSesionScreen
-        onEntrar={(datos) => {
-          // TODO: guardar token / sesión
-          onAuthSuccess(datos);
-        }}
-        onRegistrate={() => setPaso('registro')}
-      />
-    );
-  }
+  if (paso === 'login') return (
+    <LoginScreen
+      onExito={onAuthSuccess}
+      onRegistrate={() => setPaso('registro')}
+    />
+  );
 
   return null;
-};
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // ESTILOS
 // ═══════════════════════════════════════════════════════════════════════════
+
 const s = StyleSheet.create({
   safe: { flex: 1 },
 
-  // ── Bienvenida ─────────────────────────────────────────────────────────
-  bienvenidaContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    gap: 28,
-  },
-  sparkles: { position: 'absolute', top: 60, width: '100%', height: 80 },
-  sparkle:  { position: 'absolute', fontSize: 14, color: C.trigo, opacity: 0.7 },
+  bienvenidaContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 28 },
+  sparkles:   { position: 'absolute', top: 60, width: '100%', height: 80 },
+  sparkle:    { position: 'absolute', fontSize: 14, color: C.trigo, opacity: 0.7 },
 
   bienvenidaTexts: { alignItems: 'center', gap: 8 },
-  appName: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: C.cacao,
-    letterSpacing: -1,
-  },
-  tagline: {
-    fontSize: 15,
-    color: C.textS,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+  appName:  { fontSize: 36, fontWeight: '700', color: C.cacao, letterSpacing: -1 },
+  tagline:  { fontSize: 15, color: C.textS, textAlign: 'center', lineHeight: 22 },
 
   bienvenidaBtns: { width: '100%', gap: 12 },
 
-  // ── Formularios ────────────────────────────────────────────────────────
-  formContainer: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 28,
-    paddingTop: 40,
-    paddingBottom: 40,
-    gap: 20,
-  },
-  formHeader: { alignItems: 'center', gap: 6 },
-  formTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: C.textP,
-    textAlign: 'center',
-    letterSpacing: -0.5,
-  },
-  formSubtitle: {
-    fontSize: 14,
-    color: C.textM,
-    textAlign: 'center',
-  },
-  fields: { width: '100%', gap: 14 },
+  formContainer: { flexGrow: 1, alignItems: 'center', paddingHorizontal: 28, paddingTop: 40, paddingBottom: 40, gap: 20 },
+  formHeader:    { alignItems: 'center', gap: 6 },
+  formTitle:     { fontSize: 22, fontWeight: '700', color: C.textP, textAlign: 'center', letterSpacing: -0.5 },
+  formSubtitle:  { fontSize: 14, color: C.textM, textAlign: 'center' },
+  fields:        { width: '100%', gap: 14 },
 
-  forgotBtn: { alignSelf: 'flex-end', marginTop: -6 },
+  errorBox:     { width: '100%', borderRadius: 10, padding: 12 },
+  errorBoxText: { fontSize: 13, textAlign: 'center' },
+
   forgotText: { fontSize: 13, color: C.textM },
 
-  // ── Botones ────────────────────────────────────────────────────────────
-  btnPrimary: {
-    width: '100%',
-    backgroundColor: C.cacao,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  btnPrimaryLabel: {
-    color: C.crema,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: 0.2,
-  },
-  btnSecondary: {
-    width: '100%',
-    backgroundColor: 'transparent',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: C.cacao,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  btnSecondaryLabel: {
-    color: C.cacao,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  btnAmarillo: {
-    width: '100%',
-    backgroundColor: C.amarillo,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  btnAmarilloLabel: {
-    color: C.cacao,
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
+  btnPrimary:      { width: '100%', backgroundColor: C.cacao, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  btnPrimaryLabel: { color: C.crema, fontSize: 16, fontWeight: '600', letterSpacing: 0.2 },
+  btnSecondary:    { width: '100%', backgroundColor: 'transparent', borderRadius: 14, borderWidth: 1.5, borderColor: C.cacao, paddingVertical: 16, alignItems: 'center' },
+  btnSecondaryLabel: { color: C.cacao, fontSize: 16, fontWeight: '600' },
+  btnAmarillo:      { width: '100%', backgroundColor: C.amarillo, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  btnAmarilloLabel: { color: C.cacao, fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
 
-  linkText: {
-    fontSize: 13,
-    color: C.textS,
-    textDecorationLine: 'underline',
-  },
+  linkText: { fontSize: 13, color: C.textS, textDecorationLine: 'underline' },
 });
-
-export default InicioSesion;
