@@ -1,0 +1,76 @@
+2026-04-04T20:11:43.566Z expo:telemetry Switching strategy from detached to instant
+2026-04-04T20:11:43.761Z expo:telemetry Recording 1 event(s)
+2026-04-04T20:11:43.791Z expo:env C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\.env does not exist, skipping this env file
+2026-04-04T20:11:43.793Z expo:env C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\.env.development does not exist, skipping this env file
+2026-04-04T20:11:43.794Z expo:env C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\.env.local does not exist, skipping this env file
+2026-04-04T20:11:43.796Z expo:env C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\.env.development.local does not exist, skipping this env file
+2026-04-04T20:11:44.450Z expo:start:server:devServer Stopping dev server (bundler: metro)
+2026-04-04T20:11:44.456Z expo:start:server:devServer Stopped dev server (bundler: metro)
+2026-04-04T20:11:44.466Z expo:start:server:metro:router Using app as the root directory for Expo Router.
+2026-04-04T20:11:45.600Z expo:metro:withMetroResolvers Appending 8 custom resolvers to Metro config. (has custom resolver: false)
+2026-04-04T20:11:45.671Z expo:start:server:urlCreator URL: http://127.0.0.1:8081
+2026-04-04T20:11:46.188Z expo:start:server:middleware:serveStatic Serving static files from: C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app\public
+2026-04-04T20:11:46.189Z expo:start:server:devServer [tunnel] connect to port: 8081
+2026-04-04T20:11:46.487Z expo:start:platforms:android:adbServer C:\Users\evanw\AppData\Local\Android\Sdk/platform-tools/adb devices -l
+2026-04-04T20:11:46.650Z expo:start:server:ngrok Stopping Tunnel
+2026-04-04T20:11:46.652Z expo:start:server:ngrok Global config path: C:\Users\evanw\.expo\ngrok.yml
+2026-04-04T20:11:47.101Z expo:start:server:ngrok Hostname: q4k-xcE-anonymous-8081.exp.direct
+2026-04-04T20:11:49.952Z expo:start:server:ngrok Tunnel URL: https://q4k-xce-anonymous-8081.exp.direct
+2026-04-04T20:11:49.959Z expo:start:server:urlCreator URL: exp://q4k-xce-anonymous-8081.exp.direct
+2026-04-04T20:11:54.268Z expo:start:server:developmentSession Development session will not ping because the user is not authenticated and there are no devices.
+2026-04-04T20:11:54.275Z expo:start:server:metro:waitForTypescript Watching file changes: [
+  'C:\\Users\\evanw\\OneDrive\\Documentos\\Paginas\\smart-crib-app\\.env.development.local',
+  'C:\\Users\\evanw\\OneDrive\\Documentos\\Paginas\\smart-crib-app\\.env.local',
+  'C:\\Users\\evanw\\OneDrive\\Documentos\\Paginas\\smart-crib-app\\.env.development',
+  'C:\\Users\\evanw\\OneDrive\\Documentos\\Paginas\\smart-crib-app\\.env'
+]
+2026-04-04T20:11:54.279Z expo:doctor:typescriptSupport Ensuring TypeScript support is setup
+2026-04-04T20:11:58.277Z expo:start:server:metro:metroWatchTypeScriptFiles Waiting for TypeScript files to be added to the project...
+2026-04-04T20:11:59.533Z expo:doctor:dependencies:bundledNativeModules Fetching bundled native modules from the server...
+2026-04-04T20:12:00.143Z expo:doctor:dependencies:validate Checking dependencies for 54.0.0: {
+  '@expo/metro-runtime': '~6.1.2',
+  '@react-navigation/bottom-tabs': '^7.15.9',
+  '@react-navigation/native': '^7.2.2',
+  expo: '~54.0.33',
+  'expo-status-bar': '~3.0.9',
+  react: '19.1.0',
+  'react-dom': '19.1.0',
+  'react-native': '0.81.5',
+  'react-native-safe-area-context': '~5.6.0',
+  'react-native-screens': '~4.16.0',
+  'react-native-svg': '15.12.1',
+  'react-native-web': '^0.21.0',
+  '@expo/ngrok': '^4.1.0'
+}
+2026-04-04T20:12:00.149Z expo:doctor:dependencies:validate Comparing known versions: [
+  '@expo/metro-runtime',
+  'expo',
+  'expo-status-bar',
+  'react',
+  'react-dom',
+  'react-native',
+  'react-native-safe-area-context',
+  'react-native-screens',
+  'react-native-svg',
+  'react-native-web'
+]
+2026-04-04T20:12:00.149Z expo:doctor:dependencies:validate Skipping packages that cannot be versioned automatically: [
+  '@react-navigation/bottom-tabs',
+  '@react-navigation/native',
+  '@expo/ngrok'
+]
+2026-04-04T20:12:00.167Z expo:doctor:dependencies:validate Package versions: {
+  '@expo/metro-runtime': '6.1.2',
+  expo: '54.0.33',
+  'expo-status-bar': '3.0.9',
+  react: '19.1.0',
+  'react-dom': '19.1.0',
+  'react-native': '0.81.5',
+  'react-native-safe-area-context': '5.6.2',
+  'react-native-screens': '4.16.0',
+  'react-native-svg': '15.12.1',
+  'react-native-web': '0.21.2'
+}
+2026-04-04T20:12:00.171Z expo:doctor:dependencies:validate Incorrect dependencies: []
+2026-04-04T20:12:17.030Z expo:utils:exit pre-exit (signal: SIGHUP, queue length: 2)
+2026-04-04T20:12:17.107Z expo:utils:exit post-exit (code: 0)

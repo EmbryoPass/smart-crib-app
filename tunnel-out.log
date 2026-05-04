@@ -1,0 +1,11 @@
+
+> smart-crib-app@1.0.0 start
+> expo start --tunnel
+
+Starting project at C:\Users\evanw\OneDrive\Documentos\Paginas\smart-crib-app
+Metro is running in CI mode, reloads are disabled. Remove CI=true to enable watch mode.
+Starting Metro Bundler
+Tunnel connected.
+Tunnel ready.
+Waiting on http://localhost:8081
+Logs for your project will appear below.
