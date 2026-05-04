@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue } from 'firebase/database';
+import { getDatabase, ref, onValue, push } from 'firebase/database'; // ← push agregado
 import { initializeAuth, getReactNativePersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -16,13 +16,12 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
-// Auth con persistencia — el usuario sigue logueado aunque cierre la app
 const auth = initializeAuth(app, {
   persistence: getReactNativePersistence(AsyncStorage),
 });
 
 export {
-  db, ref, onValue,
+  db, ref, onValue, push, // ← push agregado
   auth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,

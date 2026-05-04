@@ -1,20 +1,20 @@
-import { useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { useState, useEffect, useRef } from 'react';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
- 
+
 import Colors from './app/constants/colors';
-import { SensorProvider } from './app/constants/SensorContext';
+import { SensorProvider, useSensor } from './app/constants/SensorContext';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
 import Cuna from './app/tabs/cuna';
 import Historial from './app/tabs/historial';
 import Ajustes from './app/tabs/ajustes';
 import InicioSesion from './app/tabs/InicioSesion';
- 
+
 const Tab = createBottomTabNavigator();
- 
+
 function IconInicio({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -25,7 +25,7 @@ function IconInicio({ color }) {
     </Svg>
   );
 }
- 
+
 function IconMonitor({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -35,7 +35,7 @@ function IconMonitor({ color }) {
     </Svg>
   );
 }
- 
+
 function IconCuna({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -46,7 +46,7 @@ function IconCuna({ color }) {
     </Svg>
   );
 }
- 
+
 function IconHistorial({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -56,7 +56,7 @@ function IconHistorial({ color }) {
     </Svg>
   );
 }
- 
+
 function IconAjustes({ color }) {
   return (
     <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
@@ -68,59 +68,111 @@ function IconAjustes({ color }) {
     </Svg>
   );
 }
- 
+
+function LlantoBanner() {
+  const { llantoActivo } = useSensor();
+  const navigation       = useNavigation();
+  const translateY       = useRef(new Animated.Value(-120)).current;
+  const pulse            = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (llantoActivo) {
+      Animated.spring(translateY, {
+        toValue: 0, useNativeDriver: true, tension: 80, friction: 10,
+      }).start();
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.04, duration: 500, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1,    duration: 500, useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      Animated.timing(translateY, {
+        toValue: -120, duration: 280, useNativeDriver: true,
+      }).start();
+      pulse.stopAnimation();
+      pulse.setValue(1);
+    }
+  }, [llantoActivo]);
+
+  return (
+    <Animated.View
+      pointerEvents={llantoActivo ? 'box-none' : 'none'}
+      style={[
+        bannerStyles.wrapper,
+        { transform: [{ translateY }, { scale: pulse }] },
+      ]}
+    >
+      <TouchableOpacity
+        activeOpacity={0.9}
+        onPress={() => navigation.navigate('historial', { tab: 'alertas', filtro: 'llanto' })}
+        style={bannerStyles.card}
+      >
+        <View style={bannerStyles.dotWrap}>
+          <View style={bannerStyles.dotOuter} />
+          <View style={bannerStyles.dotInner} />
+        </View>
+        <View style={bannerStyles.texts}>
+          <Text style={bannerStyles.titulo}>{'bebe llorando'}</Text>
+          <Text style={bannerStyles.sub}>{'toca para ver historial de alertas'}</Text>
+        </View>
+        <Text style={bannerStyles.arrow}>{'>'}</Text>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
- 
-  // Si no hay sesión → pantalla de auth
+
   if (!usuario) {
     return <InicioSesion onAuthSuccess={(datos) => setUsuario(datos)} />;
   }
- 
-  // Si hay sesión → app normal con tabs
+
   return (
-  <SensorProvider> 
-    <NavigationContainer>
-      <Tab.Navigator
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: styles.tabBar,
-          tabBarActiveTintColor: Colors.brown,
-          tabBarInactiveTintColor: Colors.brownLight,
-          tabBarLabelStyle: styles.tabLabel,
-        }}
-      >
-        <Tab.Screen
-          name="inicio"
-          component={Inicio}
-          options={{ tabBarIcon: ({ color }) => <IconInicio color={color} /> }}
-        />
-        <Tab.Screen
-          name="monitor"
-          component={Monitor}
-          options={{ tabBarIcon: ({ color }) => <IconMonitor color={color} /> }}
-        />
-        <Tab.Screen
-          name="cuna"
-          component={Cuna}
-          options={{ tabBarIcon: ({ color }) => <IconCuna color={color} /> }}
-        />
-        <Tab.Screen
-          name="historial"
-          component={Historial}
-          options={{ tabBarIcon: ({ color }) => <IconHistorial color={color} /> }}
-        />
-        <Tab.Screen
-          name="ajustes"
-          component={Ajustes}
-          options={{ tabBarIcon: ({ color }) => <IconAjustes color={color} /> }}
-        />
-      </Tab.Navigator>
-    </NavigationContainer>
-  </SensorProvider> 
+    <SensorProvider>
+      <NavigationContainer>
+        <Tab.Navigator
+          screenOptions={{
+            headerShown: false,
+            tabBarStyle: styles.tabBar,
+            tabBarActiveTintColor: Colors.brown,
+            tabBarInactiveTintColor: Colors.brownLight,
+            tabBarLabelStyle: styles.tabLabel,
+          }}
+        >
+          <Tab.Screen
+            name="inicio"
+            component={Inicio}
+            options={{ tabBarIcon: ({ color }) => <IconInicio color={color} /> }}
+          />
+          <Tab.Screen
+            name="monitor"
+            component={Monitor}
+            options={{ tabBarIcon: ({ color }) => <IconMonitor color={color} /> }}
+          />
+          <Tab.Screen
+            name="cuna"
+            component={Cuna}
+            options={{ tabBarIcon: ({ color }) => <IconCuna color={color} /> }}
+          />
+          <Tab.Screen
+            name="historial"
+            component={Historial}
+            options={{ tabBarIcon: ({ color }) => <IconHistorial color={color} /> }}
+          />
+          <Tab.Screen
+            name="ajustes"
+            component={Ajustes}
+            options={{ tabBarIcon: ({ color }) => <IconAjustes color={color} /> }}
+          />
+        </Tab.Navigator>
+        <LlantoBanner />
+      </NavigationContainer>
+    </SensorProvider>
   );
 }
- 
+
 const styles = StyleSheet.create({
   tabBar: {
     borderTopWidth: 1,
@@ -137,4 +189,26 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 });
- 
+
+const bannerStyles = StyleSheet.create({
+  wrapper: {
+    position: 'absolute', left: 16, right: 16,
+    top: 55,
+    zIndex: 999, elevation: 10,
+  },
+  card: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#FCEAEA', borderRadius: 20,
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderWidth: 1.5, borderColor: '#F0BFBF', gap: 12,
+    shadowColor: '#C05050', shadowOpacity: 0.15,
+    shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+  },
+  dotWrap:  { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
+  dotOuter: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#C05050', opacity: 0.3, position: 'absolute' },
+  dotInner: { width: 8,  height: 8,  borderRadius: 4, backgroundColor: '#C05050' },
+  texts:    { flex: 1 },
+  titulo:   { fontSize: 14, fontWeight: '700', color: '#C05050' },
+  sub:      { fontSize: 11, color: '#C05050', opacity: 0.8, marginTop: 1 },
+  arrow:    { fontSize: 22, color: '#C05050', fontWeight: '300' },
+});

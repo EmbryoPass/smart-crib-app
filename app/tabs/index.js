@@ -1,157 +1,255 @@
+// app/tabs/inicio.js — Capullo App
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  StyleSheet,
-  TouchableOpacity,
-  Animated,
-  Platform,
+  View, Text, ScrollView, StyleSheet,
+  TouchableOpacity, Animated, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import Colors from '../constants/colors'; // Verifica que esta ruta sea correcta en tu proyecto
+import { getDatabase, ref, onValue, query, orderByChild, startAt } from 'firebase/database';
+import Colors from '../constants/colors';
+import { useSensor } from '../constants/SensorContext';
 
-// ─── COMPONENTES VISUALES ────────────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────────────────────────
+const inicioDeHoy = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
 
-// Icono de la cunita
-const BabyIcon = () => (
-  <View style={styles.babyContainer}>
-    <View style={styles.cradle}>
-      <Text style={{ fontSize: 16 }}>😊</Text>
-    </View>
-    <View style={styles.cradleLegs}>
-      <View style={styles.leg} />
-      <View style={styles.leg} />
-    </View>
-  </View>
-);
+// ─── Hook: cuenta de llantos hoy desde Firebase ────────────────────────────
+// Más confiable que el contador en memoria (persiste entre reinicios de app)
+const useLlantosHoy = () => {
+  const [count, setCount] = useState(0);
 
-// Puntito verde animado ("Live")
-const LiveDot = () => {
+  useEffect(() => {
+    const db     = getDatabase();
+    const r      = query(
+      ref(db, 'alertas'),
+      orderByChild('ts'),
+      startAt(inicioDeHoy()),
+    );
+    return onValue(r, (snap) => {
+      if (!snap.exists()) { setCount(0); return; }
+      const llantosDeHoy = Object.values(snap.val()).filter(v => v.cat === 'llanto');
+      setCount(llantosDeHoy.length);
+    });
+  }, []);
+
+  return count;
+};
+
+// ─── Dot animado — verde para live, rojo para alerta ──────────────────────
+const PulseDot = ({ color }) => {
   const pulse = useRef(new Animated.Value(1)).current;
-  
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, { toValue: 1.4, duration: 600, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1,   duration: 600, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1.5, duration: 550, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,   duration: 550, useNativeDriver: true }),
       ])
     ).start();
-  }, [pulse]);
-
+  }, []);
   return (
-    <View style={styles.liveDotWrapper}>
-      <Animated.View style={[styles.liveDotOuter, { transform: [{ scale: pulse }] }]} />
-      <View style={styles.liveDotInner} />
+    <View style={dot.wrapper}>
+      <Animated.View style={[dot.outer, { backgroundColor: color, transform: [{ scale: pulse }] }]} />
+      <View style={[dot.inner, { backgroundColor: color }]} />
     </View>
   );
 };
 
-// ─── PANTALLA PRINCIPAL ──────────────────────────────────────────────────────
+const dot = StyleSheet.create({
+  wrapper: { width: 12, height: 12, alignItems: 'center', justifyContent: 'center' },
+  outer:   { width: 12, height: 12, borderRadius: 6, opacity: 0.3, position: 'absolute' },
+  inner:   { width: 7,  height: 7,  borderRadius: 4 },
+});
 
+// ─── Ícono de cuna ─────────────────────────────────────────────────────────
+const CunaIcon = ({ detected }) => (
+  <View style={styles.cunaWrap}>
+    <View style={[styles.cunaBody, { borderColor: detected ? Colors.brownLight : Colors.brownPale }]}>
+      <Text style={{ fontSize: 18 }}>{detected ? '😴' : '🛏️'}</Text>
+    </View>
+    <View style={styles.cunaLegs}>
+      <View style={[styles.cunaLeg, { backgroundColor: Colors.brownPale }]} />
+      <View style={[styles.cunaLeg, { backgroundColor: Colors.brownPale }]} />
+    </View>
+  </View>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 export default function Inicio() {
   const navigation = useNavigation();
-  const [caregiver, setCaregiver] = useState('Mamá');
-  const [sleeping, setSleeping]   = useState(true);
+  const [cuidador, setCuidador] = useState('Mamá');
 
-  // Datos para renderizar los cuidadores
-  const caregivers = [
+  const {
+    tempBebe, bebeDetectado, termicoConectado,
+    temperatura, humedad,
+    llantoActivo, ultimoLlanto,
+  } = useSensor();
+
+  const llantosHoy = useLlantosHoy();
+
+  const cuidadores = [
     { id: '1', name: 'Mamá',   dist: '65 cm', bg: Colors.danger,  text: Colors.dangerDark },
-    { id: '2', name: 'Papá',   dist: '80 cm', bg: '#E3F2FD',      text: '#1B4F72' },
+    { id: '2', name: 'Papá',   dist: '80 cm', bg: '#E3F2FD',      text: '#1B4F72'         },
     { id: '3', name: 'Abuela', dist: '55 cm', bg: Colors.success, text: Colors.successDark },
   ];
 
+  // Estado de la hero card
+  const estadoLabel = !termicoConectado
+    ? 'sin conexión'
+    : bebeDetectado ? 'bebé en cuna' : 'cuna vacía';
+
+  const estadoBg = !termicoConectado
+    ? Colors.bgCard
+    : bebeDetectado ? Colors.success : '#F5F0E8';
+
+  const estadoColor = !termicoConectado
+    ? Colors.textTertiary
+    : bebeDetectado ? Colors.successDark : Colors.textSecondary;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.appName}>
-            capullo<Text style={{ color: Colors.brownLight }}>.</Text>
-          </Text>
+          <Text style={styles.appName}>capullo<Text style={{ color: Colors.brownLight }}>.</Text></Text>
           <Text style={styles.greeting}>buenos días, Sofía</Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity>
-            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.brown} />
-          </TouchableOpacity>
           <TouchableOpacity style={styles.bellBtn}>
             <Ionicons name="notifications-outline" size={22} color={Colors.brown} />
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView 
-        contentContainerStyle={styles.scroll} 
-        showsVerticalScrollIndicator={false}
-      >
-        
-        {/* Tarjeta de Temperatura */}
-        <TouchableOpacity 
-          activeOpacity={0.9} 
-          onPress={() => setSleeping(!sleeping)}
-          style={styles.tempCard}
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Hero: estado del bebé ── */}
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => navigation.navigate('monitor')}
+          style={styles.heroCard}
         >
-          <View style={styles.tempCardInfo}>
-            <View style={[styles.statusPill, { backgroundColor: sleeping ? Colors.success : Colors.danger }]}>
-              <Text style={[styles.statusText, { color: sleeping ? Colors.successDark : Colors.dangerDark }]}>
-                {sleeping ? 'durmiendo tranquilo' : 'bebé despierto'}
-              </Text>
+          <View style={styles.heroInfo}>
+            <View style={[styles.statusPill, { backgroundColor: estadoBg }]}>
+              {bebeDetectado && termicoConectado && (
+                <PulseDot color={Colors.successDark} />
+              )}
+              <Text style={[styles.statusText, { color: estadoColor }]}>{estadoLabel}</Text>
             </View>
-            <Text style={styles.tempValue}>36.8<Text style={styles.tempUnit}>ºC</Text></Text>
-            <Text style={styles.tempSub}>temperatura bebé · hace 12s</Text>
+
+            <Text style={styles.tempValue}>
+              {tempBebe != null ? `${tempBebe}` : '--'}
+              <Text style={styles.tempUnit}> °C</Text>
+            </Text>
+
+            <Text style={styles.tempSub}>
+              {bebeDetectado ? 'zona caliente' : 'toca para ver monitor'}
+            </Text>
           </View>
-          <BabyIcon />
+          <CunaIcon detected={bebeDetectado} />
         </TouchableOpacity>
 
-        {/* Sección Cuidadores */}
-        <Text style={styles.sectionLabel}>¿quién atiende?</Text>
+        {/* ── Ambiente y humedad ── */}
         <View style={styles.row}>
-          {caregivers.map((c) => (
-            <TouchableOpacity 
+          <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
+            <Text style={styles.ambIcon}>🏠</Text>
+            <Text style={styles.ambLabel}>temperatura cuarto</Text>
+            <Text style={styles.ambValue}>
+              {temperatura != null ? `${temperatura}°C` : '--'}
+            </Text>
+            <Text style={styles.ambHint}>
+              {temperatura != null
+                ? temperatura >= 18 && temperatura <= 22
+                  ? 'rango ideal ✓'
+                  : temperatura < 18 ? 'cuarto frío' : 'cuarto caliente'
+                : 'sin datos'}
+            </Text>
+          </View>
+          <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
+            <Text style={styles.ambIcon}>💧</Text>
+            <Text style={styles.ambLabel}>humedad cuarto</Text>
+            <Text style={styles.ambValue}>
+              {humedad != null ? `${humedad}%` : '--'}
+            </Text>
+            <Text style={styles.ambHint}>
+              {humedad != null
+                ? humedad >= 40 && humedad <= 60
+                  ? 'rango ideal ✓'
+                  : humedad < 40 ? 'ambiente seco' : 'ambiente húmedo'
+                : 'sin datos'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ── ¿Quién atiende? ── */}
+        <Text style={styles.sectionLabel}>¿quién atiende?</Text>
+        <View style={[styles.row, { marginBottom: 20 }]}>
+          {cuidadores.map(c => (
+            <TouchableOpacity
               key={c.id}
-              onPress={() => setCaregiver(c.name)}
+              onPress={() => setCuidador(c.name)}
               style={[
-                styles.caregiverCard, 
+                styles.cuidadorCard,
                 { backgroundColor: c.bg },
-                caregiver === c.name && styles.caregiverSelected
+                cuidador === c.name && styles.cuidadorSelected,
               ]}
             >
-              <Text style={[styles.caregiverLabel, { color: c.text }]}>{c.name}</Text>
-              <Text style={[styles.caregiverValue, { color: c.text }]}>{c.dist}</Text>
+              <Text style={[styles.cuidadorName, { color: c.text }]}>{c.name}</Text>
+              <Text style={[styles.cuidadorDist, { color: c.text }]}>{c.dist}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* Stats Rápidas */}
-        <View style={styles.row}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>sueño</Text>
-            <Text style={styles.statValue}>6h 20m</Text>
+        {/* ── Llantos hoy ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('historial', { tab: 'alertas', filtro: 'llanto' })}
+          style={[
+            styles.llantoCard,
+            {
+              backgroundColor: llantoActivo
+                ? Colors.danger
+                : llantosHoy > 0 ? '#FFF3F3' : Colors.bgCard,
+            },
+          ]}
+        >
+          <View style={styles.llantoLeft}>
+            {llantoActivo && <PulseDot color={Colors.dangerDark} />}
+            <View>
+              <Text style={[styles.llantoTitulo, { color: llantoActivo ? Colors.dangerDark : Colors.brown }]}>
+                {llantoActivo ? 'bebé llorando ahora' : `llantos hoy · ${llantosHoy}`}
+              </Text>
+              <Text style={[styles.llantoSub, { color: llantoActivo ? Colors.dangerDark : Colors.textTertiary }]}>
+                {llantoActivo
+                  ? 'detectado en este momento'
+                  : ultimoLlanto
+                    ? `último: ${ultimoLlanto.hora} · ${ultimoLlanto.duracion}`
+                    : llantosHoy === 0 ? 'ninguno registrado hoy' : 'toca para ver historial'}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>llantos</Text>
-            <Text style={styles.statValue}>2 hoy</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>prom.</Text>
-            <Text style={styles.statValue}>36.8º</Text>
-          </View>
-        </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={llantoActivo ? Colors.dangerDark : Colors.textTertiary}
+          />
+        </TouchableOpacity>
 
-        {/* Cámara en Vivo (Navegación al Monitor) */}
-        <TouchableOpacity 
-          activeOpacity={0.8} 
-          onPress={() => navigation.navigate('monitor', {abrirCamara: true})} // <--- Navegación activada
-          style={styles.cameraContainer}
+        {/* ── Cámara en vivo ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('monitor', { abrirCamara: true })}
+          style={styles.cameraCard}
         >
           <View style={styles.cameraHeader}>
             <Text style={styles.cameraLabel}>cámara en vivo</Text>
             <View style={styles.liveBadge}>
-              <LiveDot />
+              <PulseDot color={Colors.successDark} />
               <Text style={styles.liveText}>live</Text>
             </View>
           </View>
@@ -161,104 +259,98 @@ export default function Inicio() {
           </View>
         </TouchableOpacity>
 
-        {/* Alerta de Llanto */}
-        <View style={styles.alertCard}>
-          <Text style={styles.alertTitle}>llanto detectado</Text>
-          <Text style={styles.alertSub}>hace 1h 12min · 3 min</Text>
-        </View>
-
-        <View style={{ height: 30 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-// ─── ESTILOS ────────────────────────────────────────────────────────────────
-
+// ═══════════════════════════════════════════════════════════════════════════
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 25, paddingTop: 15, paddingBottom: 15
-  },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 15 },
-  appName: { fontSize: 28, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
-  greeting: { fontSize: 13, color: Colors.textSecondary, marginTop: -2 },
-  bellBtn: { 
-    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bgSurface, 
-    alignItems: 'center', justifyContent: 'center' 
-  },
-  
+  safe:   { flex: 1, backgroundColor: Colors.bg },
   scroll: { paddingHorizontal: 20, paddingTop: 10 },
 
-  // Tarjeta Temperatura
-  tempCard: {
-    backgroundColor: Colors.bgCard, borderRadius: 30, padding: 22,
+  header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 20, 
-    ...Platform.select({ 
-      ios: { shadowColor: Colors.brown, shadowOpacity: 0.05, shadowRadius: 10 }, 
-      android: { elevation: 2 } 
-    })
+    paddingHorizontal: 25, paddingTop: 15, paddingBottom: 15,
   },
-  tempCardInfo: { flex: 1 },
-  statusPill: { 
-    paddingHorizontal: 12, paddingVertical: 4, borderRadius: 20, 
-    alignSelf: 'flex-start', marginBottom: 8 
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+  appName:  { fontSize: 28, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
+  greeting: { fontSize: 13, color: Colors.textSecondary, marginTop: -2 },
+  bellBtn:  {
+    width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.bgSurface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  // Hero
+  heroCard: {
+    backgroundColor: Colors.bgCard, borderRadius: 28, padding: 22,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 14,
+    ...Platform.select({
+      ios:     { shadowColor: Colors.brown, shadowOpacity: 0.06, shadowRadius: 12 },
+      android: { elevation: 2 },
+    }),
+  },
+  heroInfo:   { flex: 1 },
+  statusPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
+    alignSelf: 'flex-start', marginBottom: 10,
   },
   statusText: { fontSize: 12, fontWeight: '600' },
-  tempValue: { fontSize: 48, fontWeight: 'bold', color: Colors.brown },
-  tempUnit: { fontSize: 22, fontWeight: '400' },
-  tempSub: { fontSize: 12, color: Colors.textTertiary },
+  tempValue:  { fontSize: 48, fontWeight: '700', color: Colors.brown, letterSpacing: -1 },
+  tempUnit:   { fontSize: 22, fontWeight: '400' },
+  tempSub:    { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
 
-  // Baby Icon
-  babyContainer: { alignItems: 'center', marginLeft: 15 },
-  cradle: { 
-    width: 75, height: 42, backgroundColor: Colors.bgCard, borderRadius: 25, 
-    borderWidth: 2, borderColor: Colors.brownPale, alignItems: 'center', justifyContent: 'center' 
+  cunaWrap: { alignItems: 'center', marginLeft: 10 },
+  cunaBody: {
+    width: 72, height: 40, borderRadius: 22,
+    borderWidth: 2, backgroundColor: Colors.bgCard,
+    alignItems: 'center', justifyContent: 'center',
   },
-  cradleLegs: { flexDirection: 'row', gap: 30, marginTop: -4 },
-  leg: { width: 2, height: 12, backgroundColor: Colors.brownPale },
+  cunaLegs: { flexDirection: 'row', gap: 28, marginTop: -3 },
+  cunaLeg:  { width: 2, height: 11 },
 
-  // Grid Layout
-  sectionLabel: { fontSize: 13, color: Colors.textSecondary, marginBottom: 10, fontWeight: '600', marginLeft: 5 },
-  row: { flexDirection: 'row', gap: 10, marginBottom: 15 },
+  // Ambiente
+  row:     { flexDirection: 'row', gap: 10, marginBottom: 14 },
+  ambCard: { flex: 1, borderRadius: 22, padding: 16, gap: 2 },
+  ambIcon:  { fontSize: 20, marginBottom: 4 },
+  ambLabel: { fontSize: 11, color: Colors.textTertiary },
+  ambValue: { fontSize: 26, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
+  ambHint:  { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
 
   // Cuidadores
-  caregiverCard: { flex: 1, padding: 15, borderRadius: 20, height: 75, justifyContent: 'center' },
-  caregiverSelected: { borderWidth: 1.5, borderColor: Colors.brownLight },
-  caregiverLabel: { fontSize: 12, fontWeight: '500' },
-  caregiverValue: { fontSize: 17, fontWeight: '700' },
+  sectionLabel: {
+    fontSize: 13, color: Colors.textSecondary,
+    fontWeight: '600', marginBottom: 10, marginLeft: 4,
+  },
+  cuidadorCard:     { flex: 1, padding: 14, borderRadius: 20, height: 72, justifyContent: 'center' },
+  cuidadorSelected: { borderWidth: 1.5, borderColor: Colors.brownLight },
+  cuidadorName:     { fontSize: 12, fontWeight: '500' },
+  cuidadorDist:     { fontSize: 18, fontWeight: '700', marginTop: 2 },
 
-  // Stats Rápidas
-  statCard: { flex: 1, backgroundColor: Colors.bgCard, padding: 15, borderRadius: 20, height: 75 },
-  statLabel: { fontSize: 11, color: Colors.textSecondary },
-  statValue: { fontSize: 15, fontWeight: '700', color: Colors.brown, marginTop: 2 },
+  // Llantos
+  llantoCard: {
+    borderRadius: 22, padding: 18, marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  llantoLeft:   { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
+  llantoTitulo: { fontSize: 14, fontWeight: '600' },
+  llantoSub:    { fontSize: 12, marginTop: 2 },
 
   // Cámara
-  cameraContainer: { backgroundColor: Colors.bgCard, borderRadius: 25, padding: 15, marginBottom: 15 },
-  cameraHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, alignItems: 'center' },
-  cameraLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
-  liveBadge: { 
-    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.success, 
-    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 12, gap: 6 
+  cameraCard:   { backgroundColor: Colors.bgCard, borderRadius: 24, padding: 16, marginBottom: 14 },
+  cameraHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  cameraLabel:  { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
+  liveBadge:    {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
   },
-  liveDotWrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  liveDotOuter: { 
-    width: 10, height: 10, borderRadius: 5, backgroundColor: Colors.successDark, 
-    opacity: 0.3, position: 'absolute' 
-  },
-  liveDotInner: { width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.successDark },
-  liveText: { fontSize: 11, fontWeight: 'bold', color: Colors.successDark },
-  
-  videoPlaceholder: { 
-    height: 100, backgroundColor: '#1A1A1A', borderRadius: 20, 
-    justifyContent: 'center', alignItems: 'center' 
+  liveText:        { fontSize: 11, fontWeight: '700', color: Colors.successDark },
+  videoPlaceholder:{
+    height: 100, backgroundColor: '#1A1A1A', borderRadius: 18,
+    justifyContent: 'center', alignItems: 'center',
   },
   tapToView: { color: Colors.brownLight, fontSize: 11, marginTop: 6, opacity: 0.8 },
-
-  // Alerta
-  alertCard: { backgroundColor: Colors.danger, padding: 18, borderRadius: 25 },
-  alertTitle: { color: Colors.dangerDark, fontWeight: 'bold', fontSize: 14 },
-  alertSub: { color: Colors.dangerDark, fontSize: 12, opacity: 0.8, marginTop: 2 },
 });
