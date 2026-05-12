@@ -18,8 +18,14 @@ const inicioDeHoy = () => {
   return d.getTime();
 };
 
+const getSaludo = () => {
+  const hora = new Date().getHours();
+  if (hora >= 6 && hora < 12)  return 'buenos días';
+  if (hora >= 12 && hora < 19) return 'buenas tardes';
+  return 'buenas noches';
+};
+
 // ─── Hook: cuenta de llantos hoy desde Firebase ────────────────────────────
-// Más confiable que el contador en memoria (persiste entre reinicios de app)
 const useLlantosHoy = () => {
   const [count, setCount] = useState(0);
 
@@ -81,7 +87,6 @@ const CunaIcon = ({ detected }) => (
 // ═══════════════════════════════════════════════════════════════════════════
 export default function Inicio() {
   const navigation = useNavigation();
-  const [cuidador, setCuidador] = useState('Mamá');
 
   const {
     tempBebe, bebeDetectado, termicoConectado,
@@ -90,12 +95,6 @@ export default function Inicio() {
   } = useSensor();
 
   const llantosHoy = useLlantosHoy();
-
-  const cuidadores = [
-    { id: '1', name: 'Mamá',   dist: '65 cm', bg: Colors.danger,  text: Colors.dangerDark },
-    { id: '2', name: 'Papá',   dist: '80 cm', bg: '#E3F2FD',      text: '#1B4F72'         },
-    { id: '3', name: 'Abuela', dist: '55 cm', bg: Colors.success, text: Colors.successDark },
-  ];
 
   // Estado de la hero card
   const estadoLabel = !termicoConectado
@@ -117,7 +116,7 @@ export default function Inicio() {
       <View style={styles.header}>
         <View>
           <Text style={styles.appName}>capullo<Text style={{ color: Colors.brownLight }}>.</Text></Text>
-          <Text style={styles.greeting}>buenos días, Sofía</Text>
+          <Text style={styles.greeting}>{getSaludo()}, Sofía</Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={styles.bellBtn}>
@@ -158,7 +157,7 @@ export default function Inicio() {
         <View style={styles.row}>
           <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
             <Text style={styles.ambIcon}>🏠</Text>
-            <Text style={styles.ambLabel}>temperatura cuarto</Text>
+            <Text style={styles.ambLabel}>temperatura en cuarto</Text>
             <Text style={styles.ambValue}>
               {temperatura != null ? `${temperatura}°C` : '--'}
             </Text>
@@ -172,7 +171,7 @@ export default function Inicio() {
           </View>
           <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
             <Text style={styles.ambIcon}>💧</Text>
-            <Text style={styles.ambLabel}>humedad cuarto</Text>
+            <Text style={styles.ambLabel}>humedad em cuarto</Text>
             <Text style={styles.ambValue}>
               {humedad != null ? `${humedad}%` : '--'}
             </Text>
@@ -184,25 +183,6 @@ export default function Inicio() {
                 : 'sin datos'}
             </Text>
           </View>
-        </View>
-
-        {/* ── ¿Quién atiende? ── */}
-        <Text style={styles.sectionLabel}>¿quién atiende?</Text>
-        <View style={[styles.row, { marginBottom: 20 }]}>
-          {cuidadores.map(c => (
-            <TouchableOpacity
-              key={c.id}
-              onPress={() => setCuidador(c.name)}
-              style={[
-                styles.cuidadorCard,
-                { backgroundColor: c.bg },
-                cuidador === c.name && styles.cuidadorSelected,
-              ]}
-            >
-              <Text style={[styles.cuidadorName, { color: c.text }]}>{c.name}</Text>
-              <Text style={[styles.cuidadorDist, { color: c.text }]}>{c.dist}</Text>
-            </TouchableOpacity>
-          ))}
         </View>
 
         {/* ── Llantos hoy ── */}
@@ -240,23 +220,44 @@ export default function Inicio() {
           />
         </TouchableOpacity>
 
+        {/* ── Resumen de hoy ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('historial', { tab: 'stats' })}
+          style={[styles.llantoCard, { backgroundColor: Colors.bgCard }]}
+        >
+          <View style={styles.llantoLeft}>
+            <Ionicons name="bar-chart-outline" size={18} color={Colors.brown} />
+            <View>
+              <Text style={[styles.llantoTitulo, { color: Colors.brown }]}>
+                resumen de hoy
+              </Text>
+              <Text style={[styles.llantoSub, { color: Colors.textTertiary }]}>
+                estadísticas y temperatura del día
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+        </TouchableOpacity>
+
         {/* ── Cámara en vivo ── */}
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => navigation.navigate('monitor', { abrirCamara: true })}
-          style={styles.cameraCard}
+          style={[styles.llantoCard, { backgroundColor: Colors.bgCard }]}
         >
-          <View style={styles.cameraHeader}>
-            <Text style={styles.cameraLabel}>cámara en vivo</Text>
-            <View style={styles.liveBadge}>
-              <PulseDot color={Colors.successDark} />
-              <Text style={styles.liveText}>live</Text>
+          <View style={styles.llantoLeft}>
+            <Feather name="video" size={18} color={Colors.brown} />
+            <View>
+              <Text style={[styles.llantoTitulo, { color: Colors.brown }]}>
+                cámara en vivo
+              </Text>
+              <Text style={[styles.llantoSub, { color: Colors.textTertiary }]}>
+                toca para ver el monitor
+              </Text>
             </View>
           </View>
-          <View style={styles.videoPlaceholder}>
-            <Feather name="video" size={24} color={Colors.brownMid} />
-            <Text style={styles.tapToView}>toca para ver monitor</Text>
-          </View>
+          <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
@@ -320,17 +321,7 @@ const styles = StyleSheet.create({
   ambValue: { fontSize: 26, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
   ambHint:  { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
 
-  // Cuidadores
-  sectionLabel: {
-    fontSize: 13, color: Colors.textSecondary,
-    fontWeight: '600', marginBottom: 10, marginLeft: 4,
-  },
-  cuidadorCard:     { flex: 1, padding: 14, borderRadius: 20, height: 72, justifyContent: 'center' },
-  cuidadorSelected: { borderWidth: 1.5, borderColor: Colors.brownLight },
-  cuidadorName:     { fontSize: 12, fontWeight: '500' },
-  cuidadorDist:     { fontSize: 18, fontWeight: '700', marginTop: 2 },
-
-  // Llantos
+  // Llantos y cámara (comparten estilos)
   llantoCard: {
     borderRadius: 22, padding: 18, marginBottom: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -338,19 +329,4 @@ const styles = StyleSheet.create({
   llantoLeft:   { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   llantoTitulo: { fontSize: 14, fontWeight: '600' },
   llantoSub:    { fontSize: 12, marginTop: 2 },
-
-  // Cámara
-  cameraCard:   { backgroundColor: Colors.bgCard, borderRadius: 24, padding: 16, marginBottom: 14 },
-  cameraHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cameraLabel:  { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
-  liveBadge:    {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: Colors.success, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12,
-  },
-  liveText:        { fontSize: 11, fontWeight: '700', color: Colors.successDark },
-  videoPlaceholder:{
-    height: 100, backgroundColor: '#1A1A1A', borderRadius: 18,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  tapToView: { color: Colors.brownLight, fontSize: 11, marginTop: 6, opacity: 0.8 },
 });

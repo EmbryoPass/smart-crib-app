@@ -1,10 +1,11 @@
 // app/tabs/InicioSesion.js — Capullo App
+// Flujo de autenticación conectado a Firebase Auth
+
 import { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator,
+  SafeAreaView, KeyboardAvoidingView, Platform, ScrollView, Image, ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   auth,
   createUserWithEmailAndPassword,
@@ -12,6 +13,7 @@ import {
   updateProfile,
 } from '../constants/firebase';
 
+// ─── Paleta ────────────────────────────────────────────────────────────────
 const C = {
   crema:    '#F5F0E8',
   arena:    '#EDE4D0',
@@ -28,6 +30,7 @@ const C = {
   errorBg:  '#FCEAEA',
 };
 
+// ─── Mascota ───────────────────────────────────────────────────────────────
 const Mascota = ({ size = 100 }) => (
   <Image
     source={require('../../assets/mascota.png')}
@@ -36,6 +39,7 @@ const Mascota = ({ size = 100 }) => (
   />
 );
 
+// ─── Input reutilizable ────────────────────────────────────────────────────
 const Input = ({ label, placeholder, value, onChangeText, secureTextEntry, keyboardType, error }) => (
   <View style={inputS.wrapper}>
     {label && <Text style={inputS.label}>{label}</Text>}
@@ -70,16 +74,17 @@ const inputS = StyleSheet.create({
   error: { fontSize: 11, color: C.error, marginTop: 2 },
 });
 
+// ─── Traduce errores de Firebase a español ─────────────────────────────────
 const traducirError = (code) => {
   const errores = {
-    'auth/email-already-in-use':   'Este email ya está registrado.',
-    'auth/invalid-email':          'El email no es válido.',
-    'auth/weak-password':          'La contraseña debe tener al menos 6 caracteres.',
-    'auth/user-not-found':         'No encontramos una cuenta con ese email.',
-    'auth/wrong-password':         'Contraseña incorrecta.',
-    'auth/invalid-credential':     'Email o contraseña incorrectos.',
-    'auth/too-many-requests':      'Demasiados intentos. Espera un momento.',
-    'auth/network-request-failed': 'Sin conexión. Revisa tu internet.',
+    'auth/email-already-in-use':    'Este email ya está registrado.',
+    'auth/invalid-email':           'El email no es válido.',
+    'auth/weak-password':           'La contraseña debe tener al menos 6 caracteres.',
+    'auth/user-not-found':          'No encontramos una cuenta con ese email.',
+    'auth/wrong-password':          'Contraseña incorrecta.',
+    'auth/invalid-credential':      'Email o contraseña incorrectos.',
+    'auth/too-many-requests':       'Demasiados intentos. Espera un momento.',
+    'auth/network-request-failed':  'Sin conexión. Revisa tu internet.',
   };
   return errores[code] ?? 'Algo salió mal. Intenta de nuevo.';
 };
@@ -87,45 +92,48 @@ const traducirError = (code) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 1: BIENVENIDA
 // ═══════════════════════════════════════════════════════════════════════════
+
 const BienvenidaScreen = ({ onCrearCuenta, onTengoCuenta }) => (
   <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
     <View style={s.bienvenidaContainer}>
 
       <View style={s.sparkles}>
-        <Text style={[s.sparkle, { top: 0,  left: 30 }]}>{'✦'}</Text>
-        <Text style={[s.sparkle, { top: 20, right: 40, fontSize: 10 }]}>{'✦'}</Text>
-        <Text style={[s.sparkle, { top: 50, left: 60, fontSize: 8  }]}>{'✦'}</Text>
+        <Text style={[s.sparkle, { top: 0,  left: 30 }]}>✦</Text>
+        <Text style={[s.sparkle, { top: 20, right: 40, fontSize: 10 }]}>✦</Text>
+        <Text style={[s.sparkle, { top: 50, left: 60, fontSize: 8  }]}>✦</Text>
       </View>
 
-      <View style={{ alignItems: 'center', gap: 5 }}>
-        <Mascota size={200} />
-        <View style={s.bienvenidaTexts}>
-          <Text style={s.appName}>{'capullo'}<Text style={{ color: C.trigo }}>{'.'}</Text></Text>
-          <Text style={s.tagline}>{'tu cuna inteligente,\ntu bebé siempre seguro'}</Text>
-        </View>
+      <View style={{ alignItems: 'center', gap: 2 }}>
+       <View style={{ alignSelf: 'center', marginLeft: -22 }}>
+         <Mascota size={190} />
+       </View>
+       <View style={s.bienvenidaTexts}>
+         <Text style={s.appName}>capullo<Text style={{ color: C.trigo }}>.</Text></Text>
+         <Text style={s.tagline}>Tu cuna inteligente,{'\n'}tu bebé siempre seguro.</Text>
+       </View>
       </View>
 
       <View style={s.bienvenidaBtns}>
         <TouchableOpacity style={s.btnPrimary} onPress={onCrearCuenta} activeOpacity={0.85}>
-          <Text style={s.btnPrimaryLabel}>{'crear cuenta'}</Text>
+          <Text style={s.btnPrimaryLabel}>Crear cuenta</Text>
         </TouchableOpacity>
         <TouchableOpacity style={s.btnSecondary} onPress={onTengoCuenta} activeOpacity={0.85}>
-          <Text style={s.btnSecondaryLabel}>{'ya tengo cuenta'}</Text>
+          <Text style={s.btnSecondaryLabel}>Ya tengo cuenta</Text>
         </TouchableOpacity>
       </View>
 
     </View>
   </SafeAreaView>
 );
-
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 2: CREAR CUENTA
 // ═══════════════════════════════════════════════════════════════════════════
+
 const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
-  const [nombre,  setNombre]  = useState('');
-  const [email,   setEmail]   = useState('');
-  const [pass,    setPass]    = useState('');
-  const [errors,  setErrors]  = useState({});
+  const [nombre, setNombre] = useState('');
+  const [email,  setEmail]  = useState('');
+  const [pass,   setPass]   = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const validar = () => {
@@ -142,8 +150,11 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
     setLoading(true);
     setErrors({});
     try {
+      // 1. Crear usuario en Firebase Auth
       const credencial = await createUserWithEmailAndPassword(auth, email, pass);
+      // 2. Guardar el nombre en el perfil
       await updateProfile(credencial.user, { displayName: nombre.trim() });
+      // 3. Pasar datos a App.js
       onExito({ nombre: nombre.trim(), email, uid: credencial.user.uid });
     } catch (err) {
       setErrors({ general: traducirError(err.code) });
@@ -154,23 +165,17 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          contentContainerStyle={s.formContainer}
-          keyboardShouldPersistTaps="always"
-          bounces={false}
-        >
-          <Mascota size={72} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={s.formContainer} keyboardShouldPersistTaps="handled">
+
+          <Mascota size={150} />
 
           <View style={s.formHeader}>
-            <Text style={s.formTitle}>{'hola, ¿cómo te llamas?'}</Text>
-            <Text style={s.formSubtitle}>{'crea tu cuenta para empezar'}</Text>
+            <Text style={s.formTitle}>Hola, ¿Cómo te llamas?</Text>
+            <Text style={s.formSubtitle}>Crea tu cuenta para empezar</Text>
           </View>
 
+          {/* Error general de Firebase */}
           {errors.general ? (
             <View style={[s.errorBox, { backgroundColor: C.errorBg }]}>
               <Text style={[s.errorBoxText, { color: C.error }]}>{errors.general}</Text>
@@ -178,9 +183,9 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
           ) : null}
 
           <View style={s.fields}>
-            <Input label="tu nombre"  placeholder="Sofía"           value={nombre} onChangeText={setNombre} error={errors.nombre} />
-            <Input label="email"      placeholder="sofia@gmail.com" value={email}  onChangeText={setEmail}  keyboardType="email-address" error={errors.email} />
-            <Input label="contraseña" placeholder="••••••••"        value={pass}   onChangeText={setPass}   secureTextEntry error={errors.pass} />
+            <Input label="Nombre"   placeholder="Sofía"           value={nombre} onChangeText={setNombre} error={errors.nombre} />
+            <Input label="Email"       placeholder="sofia@gmail.com"  value={email}  onChangeText={setEmail}  keyboardType="email-address" error={errors.email} />
+            <Input label="Contraseña"  placeholder="••••••••"         value={pass}   onChangeText={setPass}   secureTextEntry error={errors.pass} />
           </View>
 
           <TouchableOpacity
@@ -191,13 +196,14 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
           >
             {loading
               ? <ActivityIndicator color={C.cacao} />
-              : <Text style={s.btnAmarilloLabel}>{'continuar →'}</Text>
+              : <Text style={s.btnAmarilloLabel}>Continuar →</Text>
             }
           </TouchableOpacity>
 
           <TouchableOpacity onPress={onIniciarSesion} style={{ marginTop: 4 }}>
-            <Text style={s.linkText}>{'¿Ya tienes cuenta? Inicia sesión'}</Text>
+            <Text style={s.linkText}>¿Ya tienes cuenta? Inicia sesión</Text>
           </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -207,10 +213,11 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // PANTALLA 3: INICIAR SESIÓN
 // ═══════════════════════════════════════════════════════════════════════════
+
 const LoginScreen = ({ onExito, onRegistrate }) => {
-  const [email,   setEmail]   = useState('');
-  const [pass,    setPass]    = useState('');
-  const [errors,  setErrors]  = useState({});
+  const [email,  setEmail]  = useState('');
+  const [pass,   setPass]   = useState('');
+  const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
   const validar = () => {
@@ -241,21 +248,14 @@ const LoginScreen = ({ onExito, onRegistrate }) => {
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: C.crema }]}>
-      <KeyboardAvoidingView
-        behavior="padding"
-        style={{ flex: 1 }}
-        keyboardVerticalOffset={0}
-      >
-        <ScrollView
-          contentContainerStyle={s.formContainer}
-          keyboardShouldPersistTaps="always"
-          bounces={false}
-        >
-          <Mascota size={72} />
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={s.formContainer} keyboardShouldPersistTaps="handled">
+
+          <Mascota size={150} />
 
           <View style={s.formHeader}>
-            <Text style={s.formTitle}>{'¡bienvenida de vuelta!'}</Text>
-            <Text style={s.formSubtitle}>{'tu bebé te ha estado esperando'}</Text>
+            <Text style={s.formTitle}>¡Bienvenid@ de vuelta!</Text>
+            <Text style={s.formSubtitle}>Tu bebé te ha estado esperando</Text>
           </View>
 
           {errors.general ? (
@@ -265,12 +265,12 @@ const LoginScreen = ({ onExito, onRegistrate }) => {
           ) : null}
 
           <View style={s.fields}>
-            <Input label="email"      placeholder="sofia@gmail.com" value={email} onChangeText={setEmail} keyboardType="email-address" error={errors.email} />
-            <Input label="contraseña" placeholder="••••••••"        value={pass}  onChangeText={setPass}  secureTextEntry error={errors.pass} />
+            <Input label="Email"      placeholder="sofia@gmail.com" value={email} onChangeText={setEmail} keyboardType="email-address" error={errors.email} />
+            <Input label="Contraseña" placeholder="••••••••"        value={pass}  onChangeText={setPass}  secureTextEntry error={errors.pass} />
           </View>
 
           <TouchableOpacity style={{ alignSelf: 'flex-end', marginTop: -6 }}>
-            <Text style={s.forgotText}>{'¿olvidaste tu contraseña?'}</Text>
+            <Text style={s.forgotText}>¿Olvidaste tu contraseña?</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -281,13 +281,14 @@ const LoginScreen = ({ onExito, onRegistrate }) => {
           >
             {loading
               ? <ActivityIndicator color={C.crema} />
-              : <Text style={s.btnPrimaryLabel}>{'entrar'}</Text>
+              : <Text style={s.btnPrimaryLabel}>Entrar</Text>
             }
           </TouchableOpacity>
 
           <TouchableOpacity onPress={onRegistrate} style={{ marginTop: 4 }}>
-            <Text style={s.linkText}>{'¿No tienes cuenta? Regístrate'}</Text>
+            <Text style={s.linkText}>¿No tienes cuenta? Regístrate</Text>
           </TouchableOpacity>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -297,6 +298,7 @@ const LoginScreen = ({ onExito, onRegistrate }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTENEDOR PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
+
 export default function InicioSesion({ onAuthSuccess }) {
   const [paso, setPaso] = useState('bienvenida');
 
@@ -327,12 +329,13 @@ export default function InicioSesion({ onAuthSuccess }) {
 // ═══════════════════════════════════════════════════════════════════════════
 // ESTILOS
 // ═══════════════════════════════════════════════════════════════════════════
+
 const s = StyleSheet.create({
   safe: { flex: 1 },
 
   bienvenidaContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
-  sparkles: { position: 'absolute', top: 60, width: '100%', height: 80 },
-  sparkle:  { position: 'absolute', fontSize: 14, color: C.trigo, opacity: 0.7 },
+  sparkles:   { position: 'absolute', top: 60, width: '100%', height: 80 },
+  sparkle:    { position: 'absolute', fontSize: 14, color: C.trigo, opacity: 0.7 },
 
   bienvenidaTexts: { alignItems: 'center', gap: 8 },
   appName:  { fontSize: 36, fontWeight: '700', color: C.cacao, letterSpacing: -1 },
@@ -351,12 +354,12 @@ const s = StyleSheet.create({
 
   forgotText: { fontSize: 13, color: C.textM },
 
-  btnPrimary:        { width: '100%', backgroundColor: C.cacao, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  btnPrimaryLabel:   { color: C.crema, fontSize: 16, fontWeight: '600', letterSpacing: 0.2 },
-  btnSecondary:      { width: '100%', backgroundColor: 'transparent', borderRadius: 14, borderWidth: 1.5, borderColor: C.cacao, paddingVertical: 16, alignItems: 'center' },
+  btnPrimary:      { width: '100%', backgroundColor: C.cacao, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  btnPrimaryLabel: { color: C.crema, fontSize: 16, fontWeight: '600', letterSpacing: 0.2 },
+  btnSecondary:    { width: '100%', backgroundColor: 'transparent', borderRadius: 14, borderWidth: 1.5, borderColor: C.cacao, paddingVertical: 16, alignItems: 'center' },
   btnSecondaryLabel: { color: C.cacao, fontSize: 16, fontWeight: '600' },
-  btnAmarillo:       { width: '100%', backgroundColor: C.amarillo, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  btnAmarilloLabel:  { color: C.cacao, fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
+  btnAmarillo:      { width: '100%', backgroundColor: C.amarillo, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
+  btnAmarilloLabel: { color: C.cacao, fontSize: 16, fontWeight: '700', letterSpacing: 0.2 },
 
   linkText: { fontSize: 13, color: C.textS, textDecorationLine: 'underline' },
 });

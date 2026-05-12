@@ -8,7 +8,6 @@ import Colors from './app/constants/colors';
 import { SensorProvider, useSensor } from './app/constants/SensorContext';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
-import Cuna from './app/tabs/cuna';
 import Historial from './app/tabs/historial';
 import Ajustes from './app/tabs/ajustes';
 import InicioSesion from './app/tabs/InicioSesion';
@@ -32,17 +31,6 @@ function IconMonitor({ color }) {
       <Rect x={1} y={4} width={10} height={8} rx={2} stroke={color} strokeWidth={1.2} />
       <Circle cx={6} cy={8} r={2} stroke={color} strokeWidth={1.1} />
       <Path d="M11 6.5l4-2v7l-4-2" stroke={color} strokeWidth={1.2} fill="none" />
-    </Svg>
-  );
-}
-
-function IconCuna({ color }) {
-  return (
-    <Svg width={22} height={22} viewBox="0 0 16 16" fill="none">
-      <Rect x={1} y={5} width={14} height={9} rx={4} stroke={color} strokeWidth={1.3} />
-      <Line x1={4} y1={14} x2={3} y2={17} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Line x1={12} y1={14} x2={13} y2={17} stroke={color} strokeWidth={1.5} strokeLinecap="round" />
-      <Path d="M5 2.5Q8 1 11 2.5" stroke={color} strokeWidth={1.2} strokeLinecap="round" fill="none" />
     </Svg>
   );
 }
@@ -150,11 +138,6 @@ export default function App() {
             name="monitor"
             component={Monitor}
             options={{ tabBarIcon: ({ color }) => <IconMonitor color={color} /> }}
-          />
-          <Tab.Screen
-            name="cuna"
-            component={Cuna}
-            options={{ tabBarIcon: ({ color }) => <IconCuna color={color} /> }}
           />
           <Tab.Screen
             name="historial"

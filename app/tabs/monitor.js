@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Colors from '../constants/colors';
 import { db, ref, onValue } from '../constants/firebase';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, useWindowDimensions } from 'react-native';
+import { WebView } from 'react-native-webview'; // ← NUEVO
 
 // ── Colores del mapa térmico ───────────────────────────────────────────────
 const STOPS = [
@@ -113,6 +114,8 @@ export default function Monitor({route, navigation}) {
   const [termicoConectado, setTermicoConectado] = useState(false);
   const [ambienteConectado, setAmbienteConectado] = useState(false);
   const [historialTemp, setHistorialTemp] = useState([]);
+  const [cameraIp, setCameraIp]     = useState(null); // ← NUEVO: IP cámara día
+  const [cameraIpIR, setCameraIpIR] = useState(null); // ← NUEVO: IP cámara IR
 
   useEffect(() => {
     // Revisamos si el index mandó el parámetro abrirCamara
@@ -178,9 +181,17 @@ export default function Monitor({route, navigation}) {
       setHumedad(data.humedad);
     });
 
+    // ── NUEVO: Escuchar IPs de cámaras ───────────────────────────────
+    const camDiaRef   = ref(db, '/camera/dayIP');
+    const camNocheRef = ref(db, '/camera/irIP');
+    const unsubCamDia   = onValue(camDiaRef,   s => setCameraIp(s.val()));
+    const unsubCamNoche = onValue(camNocheRef, s => setCameraIpIR(s.val()));
+
     return () => {
       unsubTermico();
       unsubAmbiente();
+      unsubCamDia();   // ← NUEVO
+      unsubCamNoche(); // ← NUEVO
     };
   }, []);
 
@@ -207,6 +218,15 @@ export default function Monitor({route, navigation}) {
     ? { color: '#3a5a8a', bg: '#e8f0fa', emoji: '💧', texto: 'Muy húmedo' }
     : { color: Colors.successDark, bg: '#e8f4ee', emoji: '✓', texto: 'Humedad ideal' };
 
+  // ── Helper: HTML del stream ──────────────────────────────────────────
+  // ← NUEVO
+  const streamHtml = (ip) =>
+    `<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh">
+      <img src="http://${ip}/" style="width:100%;height:100%;object-fit:contain">
+    </body></html>`;
+
+  const ipActiva = modoIR ? cameraIpIR : cameraIp;
+
   // ── Cámara expandida ─────────────────────────────────────────────────
   if (camaraExpandida) {
     return (
@@ -218,17 +238,28 @@ export default function Monitor({route, navigation}) {
               <Text style={styles.cerrarText}>cerrar</Text>
             </TouchableOpacity>
           </View>
-          <View style={styles.camaraExpandida}>
-            <View style={[styles.camaraIcono, modoIR && styles.camaraIconoIR]}>
-              <View style={[styles.lente, modoIR && styles.lenteIR]} />
+
+          {/* ── NUEVO: stream real si hay IP, placeholder si no ── */}
+          {ipActiva ? (
+            <WebView
+              source={{ html: streamHtml(ipActiva) }}
+              style={{ flex: 1, backgroundColor: '#000' }}
+              scrollEnabled={false}
+            />
+          ) : (
+            <View style={styles.camaraExpandida}>
+              <View style={[styles.camaraIcono, modoIR && styles.camaraIconoIR]}>
+                <View style={[styles.lente, modoIR && styles.lenteIR]} />
+              </View>
+              <Text style={[styles.camaraLabel, modoIR && styles.camaraLabelIR]}>
+                {modoIR ? 'ESP32-CAM · IR activo' : 'ESP32-CAM · modo día'}
+              </Text>
+              <Text style={[styles.camaraSubLabel, modoIR && styles.camaraSubLabelIR]}>
+                esperando IP de cámara...
+              </Text>
             </View>
-            <Text style={[styles.camaraLabel, modoIR && styles.camaraLabelIR]}>
-              {modoIR ? 'ESP32-CAM · IR activo' : 'ESP32-CAM · modo día'}
-            </Text>
-            <Text style={[styles.camaraSubLabel, modoIR && styles.camaraSubLabelIR]}>
-              conectando stream...
-            </Text>
-          </View>
+          )}
+
           <View style={styles.botonesGrandes}>
             <TouchableOpacity
               style={[styles.btnGrande, !modoIR && styles.btnGrandeActivoDia]}
@@ -346,17 +377,30 @@ export default function Monitor({route, navigation}) {
           <View style={styles.bebeDetectadoDot} />
           <Text style={styles.bebeDetectadoText}>bebé detectado</Text>
         </View>
-        <View style={styles.camaraPlaceholder}>
-          <View style={[styles.camaraIcono, modoIR && styles.camaraIconoIR]}>
-            <View style={[styles.lente, modoIR && styles.lenteIR]} />
+
+        {/* ── NUEVO: stream en miniatura si hay IP, placeholder si no ── */}
+        {ipActiva ? (
+          <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
+            <WebView
+              source={{ html: streamHtml(ipActiva) }}
+              style={{ flex: 1 }}
+              scrollEnabled={false}
+            />
           </View>
-          <Text style={[styles.camaraLabel, modoIR && styles.camaraLabelIR]}>
-            {modoIR ? 'ESP32-CAM · IR activo' : 'ESP32-CAM · modo día'}
-          </Text>
-          <Text style={[styles.camaraSubLabel, modoIR && styles.camaraSubLabelIR]}>
-            toca para expandir
-          </Text>
-        </View>
+        ) : (
+          <View style={styles.camaraPlaceholder}>
+            <View style={[styles.camaraIcono, modoIR && styles.camaraIconoIR]}>
+              <View style={[styles.lente, modoIR && styles.lenteIR]} />
+            </View>
+            <Text style={[styles.camaraLabel, modoIR && styles.camaraLabelIR]}>
+              {modoIR ? 'ESP32-CAM · IR activo' : 'ESP32-CAM · modo día'}
+            </Text>
+            <Text style={[styles.camaraSubLabel, modoIR && styles.camaraSubLabelIR]}>
+              toca para expandir
+            </Text>
+          </View>
+        )}
+
         <View style={styles.liveBadge}>
           <View style={[styles.liveDot, modoIR && styles.liveDotIR]} />
           <Text style={[styles.liveText, modoIR && styles.liveTextIR]}>en vivo</Text>
