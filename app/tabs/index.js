@@ -1,5 +1,5 @@
 // app/tabs/inicio.js — Capullo App
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, ScrollView, StyleSheet,
   TouchableOpacity, Animated, Platform,
@@ -30,8 +30,8 @@ const useLlantosHoy = () => {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    const db     = getDatabase();
-    const r      = query(
+    const db = getDatabase();
+    const r  = query(
       ref(db, 'alertas'),
       orderByChild('ts'),
       startAt(inicioDeHoy()),
@@ -46,7 +46,7 @@ const useLlantosHoy = () => {
   return count;
 };
 
-// ─── Dot animado — verde para live, rojo para alerta ──────────────────────
+// ─── Dot animado ───────────────────────────────────────────────────────────
 const PulseDot = ({ color }) => {
   const pulse = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -84,6 +84,123 @@ const CunaIcon = ({ detected }) => (
   </View>
 );
 
+// ─── EstadoDia ─────────────────────────────────────────────────────────────
+const calcularEstadoBebe = ({ llantoActivo, llantosHoy, bebeDetectado, termicoConectado, suenoCuna }) => {
+  if (!termicoConectado) {
+    return {
+      tipo:  'neutro',
+      emoji: '📡',
+      titulo: 'sensor desconectado',
+      sub:   'conecta el sensor para ver cómo va el día.',
+      chips: [],
+    };
+  }
+
+  if (llantoActivo) {
+    return {
+      tipo:  'activo',
+      emoji: '😢',
+      titulo: 'bebé llorando ahora',
+      sub:   'se detectó llanto en este momento. ve a revisar cómo está.',
+      chips: ['llanto activo', 'revisar ahora'],
+    };
+  }
+
+  if (llantosHoy === 0) {
+    return {
+      tipo:  'bien',
+      emoji: '🌟',
+      titulo: 'excelente día',
+      sub:   `no ha llorado nada hoy${suenoCuna ? ` y estuvo ${suenoCuna} tranquilo en cuna.` : '.'}`,
+      chips: [
+        '0 llantos',
+        suenoCuna ? `${suenoCuna} en cuna` : null,
+        bebeDetectado ? 'en cuna ahora' : null,
+      ].filter(Boolean),
+    };
+  }
+
+  if (llantosHoy <= 2) {
+    return {
+      tipo:  'bien',
+      emoji: '😊',
+      titulo: 'buen día en general',
+      sub:   `lloró ${llantosHoy === 1 ? 'una vez' : 'un par de veces'} pero se calmó rápido.`,
+      chips: [
+        `${llantosHoy} ${llantosHoy === 1 ? 'llanto' : 'llantos'}`,
+        suenoCuna ? `${suenoCuna} en cuna` : null,
+        'todo tranquilo',
+      ].filter(Boolean),
+    };
+  }
+
+  if (llantosHoy <= 4) {
+    return {
+      tipo:  'ojo',
+      emoji: '😮‍💨',
+      titulo: 'día un poco movido',
+      sub:   `ha llorado ${llantosHoy} veces hoy. puede que esté incómodo o con sueño.`,
+      chips: [
+        `${llantosHoy} llantos`,
+        suenoCuna ? `${suenoCuna} en cuna` : null,
+        'estuvo inquieto',
+      ].filter(Boolean),
+    };
+  }
+
+  return {
+    tipo:  'activo',
+    emoji: '😢',
+    titulo: 'día difícil',
+    sub:   `ha llorado ${llantosHoy} veces hoy. revisa si necesita algo especial.`,
+    chips: [`${llantosHoy} llantos`, 'necesita atención'],
+  };
+};
+
+const estadoColores = {
+  bien:   { bg: '#E8F5EE', border: '#9FE1CB', titulo: '#085041', sub: '#0F6E56', chip: { bg: '#C8EAD8', border: '#9FE1CB', text: '#085041' } },
+  ojo:    { bg: '#FAEEDA', border: '#FAC775', titulo: '#633806', sub: '#854F0B', chip: { bg: '#FAD89A', border: '#FAC775', text: '#633806' } },
+  activo: { bg: '#FAECE7', border: '#F0997B', titulo: '#712B13', sub: '#993C1D', chip: { bg: '#F5C4B3', border: '#F0997B', text: '#712B13' } },
+  neutro: { bg: Colors.bgCard, border: Colors.brownPale, titulo: Colors.brown,  sub: Colors.textTertiary, chip: { bg: Colors.bgCard, border: Colors.brownPale, text: Colors.textTertiary } },
+};
+
+const EstadoDia = (props) => {
+  const estado = calcularEstadoBebe(props);
+  const c      = estadoColores[estado.tipo] ?? estadoColores.neutro;
+
+  return (
+    <View style={[edStyles.card, { backgroundColor: c.bg, borderColor: c.border }]}>
+      <View style={edStyles.top}>
+        <Text style={edStyles.emoji}>{estado.emoji}</Text>
+        <View style={{ flex: 1 }}>
+          <Text style={[edStyles.titulo, { color: c.titulo }]}>{estado.titulo}</Text>
+          <Text style={[edStyles.sub,    { color: c.sub    }]}>{estado.sub}</Text>
+        </View>
+      </View>
+      {estado.chips.length > 0 && (
+        <View style={edStyles.chips}>
+          {estado.chips.map((chip, i) => (
+            <View key={i} style={[edStyles.chip, { backgroundColor: c.chip.bg, borderColor: c.chip.border }]}>
+              <Text style={[edStyles.chipText, { color: c.chip.text }]}>{chip}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+const edStyles = StyleSheet.create({
+  card:     { borderRadius: 24, borderWidth: 1, padding: 20, marginBottom: 14 },
+  top:      { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 12 },
+  emoji:    { fontSize: 40, lineHeight: 48 },
+  titulo:   { fontSize: 16, fontWeight: '700', marginBottom: 3 },
+  sub:      { fontSize: 12, lineHeight: 18 },
+  chips:    { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
+  chip:     { paddingHorizontal: 11, paddingVertical: 5, borderRadius: 20, borderWidth: 1 },
+  chipText: { fontSize: 11, fontWeight: '500' },
+});
+
 // ═══════════════════════════════════════════════════════════════════════════
 export default function Inicio() {
   const navigation = useNavigation();
@@ -92,11 +209,11 @@ export default function Inicio() {
     tempBebe, bebeDetectado, termicoConectado,
     temperatura, humedad,
     llantoActivo, ultimoLlanto,
+    suenoCuna,
   } = useSensor();
 
   const llantosHoy = useLlantosHoy();
 
-  // Estado de la hero card
   const estadoLabel = !termicoConectado
     ? 'sin conexión'
     : bebeDetectado ? 'bebé en cuna' : 'cuna vacía';
@@ -126,6 +243,15 @@ export default function Inicio() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Cómo va el día del bebé — lo primero que ves ── */}
+        <EstadoDia
+          llantoActivo={llantoActivo}
+          llantosHoy={llantosHoy}
+          bebeDetectado={bebeDetectado}
+          termicoConectado={termicoConectado}
+          suenoCuna={suenoCuna ?? null}
+        />
 
         {/* ── Hero: estado del bebé ── */}
         <TouchableOpacity
@@ -171,7 +297,7 @@ export default function Inicio() {
           </View>
           <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
             <Text style={styles.ambIcon}>💧</Text>
-            <Text style={styles.ambLabel}>humedad em cuarto</Text>
+            <Text style={styles.ambLabel}>humedad en cuarto</Text>
             <Text style={styles.ambValue}>
               {humedad != null ? `${humedad}%` : '--'}
             </Text>
@@ -321,7 +447,7 @@ const styles = StyleSheet.create({
   ambValue: { fontSize: 26, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
   ambHint:  { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
 
-  // Llantos y cámara (comparten estilos)
+  // Llantos y cámara
   llantoCard: {
     borderRadius: 22, padding: 18, marginBottom: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
