@@ -10,6 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { getDatabase, ref, onValue, query, orderByChild, startAt } from 'firebase/database';
 import Colors from '../constants/colors';
 import { useSensor } from '../constants/SensorContext';
+import { auth } from '../constants/firebase';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 const inicioDeHoy = () => {
@@ -23,6 +24,22 @@ const getSaludo = () => {
   if (hora >= 6 && hora < 12)  return 'buenos días';
   if (hora >= 12 && hora < 19) return 'buenas tardes';
   return 'buenas noches';
+};
+
+// ─── Hook: nombre del cuidador desde Firebase ──────────────────────────────
+const useNombreCuidador = () => {
+  const [nombre, setNombre] = useState('');
+
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const db = getDatabase();
+    return onValue(ref(db, `usuarios/${uid}/nombre`), (snap) => {
+      setNombre(snap.val() ?? '');
+    });
+  }, []);
+
+  return nombre;
 };
 
 // ─── Hook: cuenta de llantos hoy desde Firebase ────────────────────────────
@@ -75,7 +92,7 @@ const dot = StyleSheet.create({
 const CunaIcon = ({ detected }) => (
   <View style={styles.cunaWrap}>
     <View style={[styles.cunaBody, { borderColor: detected ? Colors.brownLight : Colors.brownPale }]}>
-      <Text style={{ fontSize: 18 }}>{detected ? '😴' : '🛏️'}</Text>
+      <Text style={{ fontSize: 18 }}>{detected ? '🧸' : '🛏️'}</Text>
     </View>
     <View style={styles.cunaLegs}>
       <View style={[styles.cunaLeg, { backgroundColor: Colors.brownPale }]} />
@@ -84,9 +101,27 @@ const CunaIcon = ({ detected }) => (
   </View>
 );
 
+// ─── Mensaje de aviso de ambiente ──────────────────────────────────────────
+const getMensajeAmbiente = (temperatura, humedad, tempFuera, humedadFuera) => {
+  if (tempFuera && humedadFuera)
+    return { tipo: 'warn', texto: 'revisa las condiciones del cuarto — temperatura y humedad fuera del rango ideal.' };
+  if (tempFuera)
+    return { tipo: 'warn', texto: temperatura < 18
+      ? 'el cuarto está frío. asegúrate de que el bebé esté bien abrigado.'
+      : 'el cuarto está caliente para dormir. ventila el cuarto o usa un ventilador.' };
+  if (humedadFuera)
+    return { tipo: 'warn', texto: humedad > 60
+      ? 'el cuarto está muy húmedo. abre una ventana para ventilar.'
+      : 'el ambiente está seco. un humidificador ayuda a que el bebé respire mejor.' };
+  if (temperatura != null && humedad != null)
+    return { tipo: 'ok', texto: 'el cuarto está en condiciones ideales para el bebé. ✓' };
+  return null;
+};
+
 // ═══════════════════════════════════════════════════════════════════════════
 export default function Inicio() {
   const navigation = useNavigation();
+  const nombre     = useNombreCuidador();
 
   const {
     tempBebe, bebeDetectado, termicoConectado,
@@ -96,7 +131,12 @@ export default function Inicio() {
 
   const llantosHoy = useLlantosHoy();
 
-  // Estado de la hero card
+  const tempFueraDeRango    = temperatura != null && (temperatura < 18 || temperatura > 22);
+  const humedadFueraDeRango = humedad     != null && (humedad < 40     || humedad > 60);
+  const tempEnRango         = temperatura != null && temperatura >= 18 && temperatura <= 22;
+  const humedadEnRango      = humedad     != null && humedad >= 40     && humedad <= 60;
+  const mensajeAmbiente     = getMensajeAmbiente(temperatura, humedad, tempFueraDeRango, humedadFueraDeRango);
+
   const estadoLabel = !termicoConectado
     ? 'sin conexión'
     : bebeDetectado ? 'bebé en cuna' : 'cuna vacía';
@@ -116,10 +156,15 @@ export default function Inicio() {
       <View style={styles.header}>
         <View>
           <Text style={styles.appName}>capullo<Text style={{ color: Colors.brownLight }}>.</Text></Text>
-          <Text style={styles.greeting}>{getSaludo()}, Sofía</Text>
+          <Text style={styles.greeting}>
+            {getSaludo()}{nombre ? `, ${nombre}` : ''}
+          </Text>
         </View>
         <View style={styles.headerActions}>
-          <TouchableOpacity style={styles.bellBtn}>
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => navigation.navigate('historial', { tab: 'alertas', filtro: 'todos' })}
+          >
             <Ionicons name="notifications-outline" size={22} color={Colors.brown} />
           </TouchableOpacity>
         </View>
@@ -155,8 +200,13 @@ export default function Inicio() {
 
         {/* ── Ambiente y humedad ── */}
         <View style={styles.row}>
-          <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
-            <Text style={styles.ambIcon}>🏠</Text>
+          <View style={[
+            styles.ambCard,
+            { backgroundColor: Colors.bgCard },
+            tempFueraDeRango && { borderWidth: 1.5, borderColor: '#E8C94A' },
+            tempEnRango      && { borderWidth: 1.5, borderColor: '#A8D5C2' },
+          ]}>
+            <Text style={styles.ambIcon}>🌡️</Text>
             <Text style={styles.ambLabel}>temperatura en cuarto</Text>
             <Text style={styles.ambValue}>
               {temperatura != null ? `${temperatura}°C` : '--'}
@@ -169,9 +219,14 @@ export default function Inicio() {
                 : 'sin datos'}
             </Text>
           </View>
-          <View style={[styles.ambCard, { backgroundColor: Colors.bgCard }]}>
+          <View style={[
+            styles.ambCard,
+            { backgroundColor: Colors.bgCard },
+            humedadFueraDeRango && { borderWidth: 1.5, borderColor: '#E8C94A' },
+            humedadEnRango      && { borderWidth: 1.5, borderColor: '#A8D5C2' },
+          ]}>
             <Text style={styles.ambIcon}>💧</Text>
-            <Text style={styles.ambLabel}>humedad em cuarto</Text>
+            <Text style={styles.ambLabel}>humedad en cuarto</Text>
             <Text style={styles.ambValue}>
               {humedad != null ? `${humedad}%` : '--'}
             </Text>
@@ -184,6 +239,29 @@ export default function Inicio() {
             </Text>
           </View>
         </View>
+
+        {/* ── Aviso / mensaje de ambiente ── */}
+        {mensajeAmbiente && (
+          <View style={[
+            styles.avisoCard,
+            mensajeAmbiente.tipo === 'ok' && { backgroundColor: '#EBF7F2', borderColor: '#A8D5C2' },
+          ]}>
+            <View style={[
+              styles.avisoIconWrap,
+              mensajeAmbiente.tipo === 'ok' && { backgroundColor: '#A8D5C2' },
+            ]}>
+              <Text style={styles.avisoEmoji}>
+                {mensajeAmbiente.tipo === 'ok' ? '✓' : '⚠️'}
+              </Text>
+            </View>
+            <Text style={[
+              styles.avisoTexto,
+              mensajeAmbiente.tipo === 'ok' && { color: '#2A7A5A' },
+            ]}>
+              {mensajeAmbiente.texto}
+            </Text>
+          </View>
+        )}
 
         {/* ── Llantos hoy ── */}
         <TouchableOpacity
@@ -200,6 +278,7 @@ export default function Inicio() {
         >
           <View style={styles.llantoLeft}>
             {llantoActivo && <PulseDot color={Colors.dangerDark} />}
+            <Ionicons name="ear-outline" size={18} color={Colors.brown} />
             <View>
               <Text style={[styles.llantoTitulo, { color: llantoActivo ? Colors.dangerDark : Colors.brown }]}>
                 {llantoActivo ? 'bebé llorando ahora' : `llantos hoy · ${llantosHoy}`}
@@ -233,7 +312,7 @@ export default function Inicio() {
                 resumen de hoy
               </Text>
               <Text style={[styles.llantoSub, { color: Colors.textTertiary }]}>
-                estadísticas y temperatura del día
+                estadísticas del día
               </Text>
             </View>
           </View>
@@ -250,7 +329,7 @@ export default function Inicio() {
             <Feather name="video" size={18} color={Colors.brown} />
             <View>
               <Text style={[styles.llantoTitulo, { color: Colors.brown }]}>
-                cámara en vivo
+                cámara
               </Text>
               <Text style={[styles.llantoSub, { color: Colors.textTertiary }]}>
                 toca para ver el monitor
@@ -283,7 +362,6 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Hero
   heroCard: {
     backgroundColor: Colors.bgCard, borderRadius: 28, padding: 22,
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -313,7 +391,6 @@ const styles = StyleSheet.create({
   cunaLegs: { flexDirection: 'row', gap: 28, marginTop: -3 },
   cunaLeg:  { width: 2, height: 11 },
 
-  // Ambiente
   row:     { flexDirection: 'row', gap: 10, marginBottom: 14 },
   ambCard: { flex: 1, borderRadius: 22, padding: 16, gap: 2 },
   ambIcon:  { fontSize: 20, marginBottom: 4 },
@@ -321,7 +398,21 @@ const styles = StyleSheet.create({
   ambValue: { fontSize: 26, fontWeight: '700', color: Colors.brown, letterSpacing: -0.5 },
   ambHint:  { fontSize: 11, color: Colors.textTertiary, marginTop: 2 },
 
-  // Llantos y cámara (comparten estilos)
+  avisoCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: '#FDF6D8',
+    borderWidth: 1.5, borderColor: '#E8C94A',
+    borderRadius: 18, padding: 14,
+    marginBottom: 14,
+  },
+  avisoIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: '#E8C94A',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avisoEmoji: { fontSize: 18 },
+  avisoTexto: { flex: 1, fontSize: 13, color: '#7A5C00', lineHeight: 19, fontWeight: '500' },
+
   llantoCard: {
     borderRadius: 22, padding: 18, marginBottom: 14,
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

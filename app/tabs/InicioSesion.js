@@ -103,8 +103,8 @@ const BienvenidaScreen = ({ onCrearCuenta, onTengoCuenta }) => (
         <Text style={[s.sparkle, { top: 50, left: 60, fontSize: 8  }]}>✦</Text>
       </View>
 
-      <View style={{ alignItems: 'center', gap: 2 }}>
-       <View style={{ alignSelf: 'center', marginLeft: -22 }}>
+      <View style={{ alignItems: 'center', gap: 0 }}>
+       <View style={{ alignSelf: 'center', marginLeft: 0 }}>
          <Mascota size={190} />
        </View>
        <View style={s.bienvenidaTexts}>
@@ -168,7 +168,9 @@ const CrearCuentaScreen = ({ onExito, onIniciarSesion }) => {
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={s.formContainer} keyboardShouldPersistTaps="handled">
 
-          <Mascota size={150} />
+          <Mascota size={150
+            
+          } />
 
           <View style={s.formHeader}>
             <Text style={s.formTitle}>Hola, ¿Cómo te llamas?</Text>

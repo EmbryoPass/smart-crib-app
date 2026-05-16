@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
-import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Rect, Circle } from 'react-native-svg';
+import { onAuthStateChanged } from 'firebase/auth';
 
 import Colors from './app/constants/colors';
+import { auth } from './app/constants/firebase';
 import { SensorProvider, useSensor } from './app/constants/SensorContext';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
@@ -111,7 +113,18 @@ function LlantoBanner() {
 }
 
 export default function App() {
-  const [usuario, setUsuario] = useState(null);
+  const [usuario,  setUsuario ] = useState(null);
+  const [cargando, setCargando] = useState(true);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      setUsuario(user ?? null);
+      setCargando(false);
+    });
+    return unsub;
+  }, []);
+
+  if (cargando) return null;
 
   if (!usuario) {
     return <InicioSesion onAuthSuccess={(datos) => setUsuario(datos)} />;

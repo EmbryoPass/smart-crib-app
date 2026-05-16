@@ -1,18 +1,19 @@
 // app/tabs/historial.js — Capullo App
-import { useState, useEffect } from 'react';
-import { useRoute } from '@react-navigation/native';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRoute, useFocusEffect } from '@react-navigation/native';
 import {
   View, Text, StyleSheet, TouchableOpacity,
   ScrollView, Dimensions, ActivityIndicator,
+  Modal, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Svg, { Polyline, Line, Circle, Text as SvgText } from 'react-native-svg';
+import Svg, { Polyline, Line, Rect, Text as SvgText } from 'react-native-svg';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   getDatabase, ref, onValue,
   query, orderByChild, limitToLast,
 } from 'firebase/database';
 import Colors from '../constants/colors';
-import { useSensor } from '../constants/SensorContext';
 
 const { width: SW } = Dimensions.get('window');
 
@@ -43,6 +44,9 @@ const ALERTA_META = {
   altura:      { color: C.infoText,   bg: C.infoBg   },
 };
 
+const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
+const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+
 const offsetToIso = (offset) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
@@ -57,14 +61,88 @@ const isoToLabel = (iso) => {
   if (iso === hoy)  return 'hoy';
   if (iso === ayer) return 'ayer';
   const d = new Date(iso + 'T12:00:00');
-  const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
-  const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
   return `${DS[d.getDay()]} ${d.getDate()} ${MS[d.getMonth()]}`;
 };
 
 const fmtHora = (ts) => {
   const d = new Date(ts);
   return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+};
+
+const fmtFecha = (date) =>
+  `${date.getDate()} ${MS[date.getMonth()]} ${date.getFullYear()}`;
+
+// ─── Hook: llantos — retorna porDia y porHora según rango ─────────────────
+const useLlantosStats = ({ desde, hasta }) => {
+  const [porDia,  setPorDia ] = useState([]);
+  const [porHora, setPorHora] = useState([]);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const r  = query(ref(db, 'alertas'), orderByChild('ts'), limitToLast(500));
+    return onValue(r, (snap) => {
+      if (!snap.exists()) { setPorDia([]); setPorHora([]); return; }
+
+      const alertas = Object.values(snap.val())
+        .filter(v => v.cat === 'llanto' && v.ts >= desde && v.ts <= hasta);
+
+      const horas = Array(24).fill(0);
+      alertas.forEach(v => { horas[new Date(v.ts).getHours()]++; });
+      setPorHora(horas.map((count, hora) => ({
+        count,
+        label: String(hora).padStart(2, '0'),
+      })));
+
+      const dias = [];
+      const diaMs  = 24 * 60 * 60 * 1000;
+      const inicio = new Date(desde); inicio.setHours(0, 0, 0, 0);
+      const fin    = new Date(hasta);
+      let cursor   = new Date(inicio);
+
+      let totalDias = 0;
+      const tempCursor = new Date(inicio);
+      while (tempCursor <= fin) { totalDias++; tempCursor.setTime(tempCursor.getTime() + diaMs); }
+
+      while (cursor <= fin) {
+        const dInicio = cursor.getTime();
+        const dFin    = dInicio + diaMs;
+        const count   = alertas.filter(v => v.ts >= dInicio && v.ts < dFin).length;
+        const hoy     = new Date(); hoy.setHours(0, 0, 0, 0);
+        const label   = cursor.getTime() === hoy.getTime()
+          ? 'hoy'
+          : totalDias > 14
+            ? String(cursor.getDate())
+            : `${DS[cursor.getDay()]} ${cursor.getDate()}`;
+        dias.push({ count, label });
+        cursor = new Date(cursor.getTime() + diaMs);
+      }
+      setPorDia(dias);
+    });
+  }, [desde, hasta]);
+
+  return { porDia, porHora };
+};
+
+// ─── Hook: historial de ambiente ──────────────────────────────────────────
+const useAmbienteHistory = ({ desde, hasta }) => {
+  const [puntosTemp, setPuntosTemp] = useState([]);
+  const [puntosHum,  setPuntosHum ] = useState([]);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const r  = ref(db, '/historial/ambiente');
+    return onValue(r, (snap) => {
+      if (!snap.exists()) { setPuntosTemp([]); setPuntosHum([]); return; }
+      const entries = Object.values(snap.val())
+        .map(v => ({ ...v, ts: v.ts * 1000 }))
+        .filter(v => v.ts >= desde && v.ts <= hasta)
+        .sort((a, b) => a.ts - b.ts);
+      setPuntosTemp(entries.map(e => ({ v: e.temperatura, ts: e.ts })));
+      setPuntosHum (entries.map(e => ({ v: e.humedad,     ts: e.ts })));
+    });
+  }, [desde, hasta]);
+
+  return { puntosTemp, puntosHum };
 };
 
 const useEventosDia = (isoDate) => {
@@ -117,12 +195,73 @@ const useAlertas = () => {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Gráfica SVG
+// Gráfica de barras genérica
 // ═══════════════════════════════════════════════════════════════════════════
-const TempChart = ({ puntos }) => {
-  const W = SW - 64, H = 118;
-  const PAD = { t: 12, b: 20, l: 4, r: 4 };
-  const minT = 36.0, maxT = 38.2;
+const BarChart = ({ datos, mensajeVacio }) => {
+  const W      = SW - 64;
+  const H      = 114;
+  const PAD    = { t: 18, b: 20, l: 4, r: 4 };
+  const total  = datos.reduce((acc, b) => acc + b.count, 0);
+  const maxVal = Math.max(...datos.map(d => d.count), 1);
+  const n      = datos.length || 1;
+  const barW   = (W - PAD.l - PAD.r) / n;
+  const innerH = H - PAD.t - PAD.b;
+  const labelStep = n <= 7 ? 1 : n <= 14 ? 2 : 5;
+
+  if (total === 0) {
+    return (
+      <View style={{ height: H, alignItems: 'center', justifyContent: 'center' }}>
+        <Text style={{ color: Colors.textTertiary, fontSize: 13 }}>
+          {mensajeVacio ?? 'sin datos en este período 🌙'}
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <Svg width={W} height={H}>
+      {datos.map(({ count }, i) => {
+        const barH = count > 0 ? Math.max((count / maxVal) * innerH, 4) : 2;
+        const x    = PAD.l + i * barW + barW * 0.15;
+        const y    = PAD.t + innerH - barH;
+        const w    = barW * 0.7;
+        return (
+          <React.Fragment key={i}>
+            <Rect x={x} y={y} width={w} height={barH} rx={3}
+              fill={count > 0 ? C.dangerText : Colors.brownPale}
+              opacity={count > 0 ? 0.85 : 0.3}
+            />
+            {count > 0 && (
+              <SvgText
+                x={x + w / 2} y={y - 3}
+                textAnchor="middle" fontSize="9" fontWeight="600"
+                fill={C.dangerText}>
+                {count}
+              </SvgText>
+            )}
+          </React.Fragment>
+        );
+      })}
+      {datos.map(({ label }, i) => {
+        if (i % labelStep !== 0 && i !== datos.length - 1) return null;
+        return (
+          <SvgText key={i}
+            x={PAD.l + i * barW + barW / 2} y={H - 4}
+            textAnchor="middle" fontSize="9" fill={Colors.textTertiary}>
+            {label}
+          </SvgText>
+        );
+      })}
+    </Svg>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Gráfica de línea — banda ideal + etiquetas separadas + valor actual
+// ═══════════════════════════════════════════════════════════════════════════
+const LineChart = ({ puntos, minVal, maxVal, colorLinea, minIdeal, maxIdeal, unidad = '' }) => {
+  const W = SW - 64, H = 120;
+  const PAD = { t: 18, b: 20, l: 4, r: 36 };
 
   if (!puntos || puntos.length < 2) {
     return (
@@ -133,27 +272,67 @@ const TempChart = ({ puntos }) => {
   }
 
   const px = (i) => PAD.l + (i / (puntos.length - 1)) * (W - PAD.l - PAD.r);
-  const py = (t) => PAD.t + (1 - (t - minT) / (maxT - minT)) * (H - PAD.t - PAD.b);
-  const polyPoints = puntos.map((p, i) => `${px(i)},${py(p.t)}`).join(' ');
-  const maxIdx = puntos.reduce((best, p, i) => p.t > puntos[best].t ? i : best, 0);
-  const maxP   = puntos[maxIdx];
-  const hasTimes = Boolean(puntos[0]?.ts);
+  const py = (v) => PAD.t + (1 - (v - minVal) / (maxVal - minVal || 1)) * (H - PAD.t - PAD.b);
+  const polyPoints = puntos.map((p, i) => `${px(i)},${py(p.v)}`).join(' ');
+
   const midIdx   = Math.floor(puntos.length / 2);
+  const hasTimes = Boolean(puntos[0]?.ts);
   const xLabels  = hasTimes
     ? [0, midIdx, puntos.length - 1].map(i => ({ x: px(i), label: fmtHora(puntos[i].ts) }))
     : [{ x: px(0), label: 'inicio' }, { x: px(puntos.length - 1), label: 'ahora' }];
 
+  const ultimo      = puntos[puntos.length - 1];
+  const ultimoX     = px(puntos.length - 1);
+  const ultimoY     = py(ultimo.v);
+  const enRango     = ultimo.v >= minIdeal && ultimo.v <= maxIdeal;
+  const colorActual = enRango ? C.successText : C.dangerText;
+  const bgActual    = enRango ? C.successBg   : C.dangerBg;
+
+  const yMax = py(maxIdeal); // línea superior de la banda
+  const yMin = py(minIdeal); // línea inferior de la banda
+  const bandaH = yMin - yMax;
+
   return (
     <Svg width={W} height={H}>
-      <Line x1={PAD.l} y1={py(37)} x2={W - PAD.r} y2={py(37)}
-        stroke={Colors.brownPale} strokeWidth={1} strokeDasharray="4,3" />
-      <Line x1={PAD.l} y1={py(37.2)} x2={W - PAD.r} y2={py(37.2)}
-        stroke={C.amarillo + '99'} strokeWidth={1} strokeDasharray="3,4" />
-      <Polyline points={polyPoints} fill="none" stroke={Colors.brown}
+      {/* ── Banda del rango ideal ── */}
+      <Rect x={PAD.l} y={yMax} width={W - PAD.l - PAD.r} height={bandaH}
+        fill={C.menta} opacity={0.25} />
+
+      {/* ── Líneas de borde de banda ── */}
+      <Line x1={PAD.l} y1={yMax} x2={W - PAD.r} y2={yMax}
+        stroke={C.menta} strokeWidth={1} strokeDasharray="3,3" />
+      <Line x1={PAD.l} y1={yMin} x2={W - PAD.r} y2={yMin}
+        stroke={C.menta} strokeWidth={1} strokeDasharray="3,3" />
+
+      {/* ── Etiqueta maxIdeal — encima de la línea superior ── */}
+      <SvgText
+        x={W - PAD.r + 2} y={yMax + 4}
+        textAnchor="start" fontSize="9" fill={C.successText} fontWeight="600">
+        {maxIdeal}{unidad}
+      </SvgText>
+
+      {/* ── Etiqueta minIdeal — debajo de la línea inferior ── */}
+      <SvgText
+        x={W - PAD.r + 2} y={yMin + 9}
+        textAnchor="start" fontSize="9" fill={C.successText} fontWeight="600">
+        {minIdeal}{unidad}
+      </SvgText>
+
+      {/* ── Línea de datos ── */}
+      <Polyline points={polyPoints} fill="none" stroke={colorLinea}
         strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      <Circle cx={px(maxIdx)} cy={py(maxP.t)} r={5}
-        fill={maxP.t > 37.2 ? C.amarillo : Colors.brownLight}
-        stroke={Colors.bgCard} strokeWidth={2} />
+
+      {/* ── Valor actual — etiqueta flotante ── */}
+      <Rect x={ultimoX - 18} y={ultimoY - 12} width={36} height={14}
+        rx={7} fill={bgActual} />
+      <SvgText
+        x={ultimoX} y={ultimoY - 2}
+        textAnchor="middle" fontSize="9" fontWeight="700"
+        fill={colorActual}>
+        {ultimo.v.toFixed(1)}{unidad}
+      </SvgText>
+
+      {/* ── Etiquetas eje X ── */}
       {xLabels.map((l, i) => (
         <SvgText key={i} x={l.x} y={H - 3}
           textAnchor={i === 0 ? 'start' : i === xLabels.length - 1 ? 'end' : 'middle'}
@@ -162,82 +341,6 @@ const TempChart = ({ puntos }) => {
         </SvgText>
       ))}
     </Svg>
-  );
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Resumen inteligente
-// ═══════════════════════════════════════════════════════════════════════════
-const generarResumen = (filtro, stats) => {
-  if (!stats) return {
-    emoji: '📡', titulo: 'sin datos aún', tono: 'neutro',
-    lineas: [{ icono: '💡', texto: 'el historial se genera automáticamente mientras el sensor esté conectado.' }],
-  };
-
-  const { sueno, tempMax, tempMaxAlta, ambProm, humProm } = stats;
-  const tono = tempMaxAlta ? 'alerta' : 'positivo';
-
-  const base = {
-    hoy: {
-      emoji: tempMaxAlta ? '🌡️' : '😴',
-      titulo: tempMaxAlta ? 'temperatura elevada hoy' : 'buen día hasta ahora',
-      tono,
-      lineas: [
-        { icono: '🌙', texto: `el bebé estuvo en cuna aproximadamente ${sueno}.` },
-        { icono: '🌡️', texto: `temperatura máxima: ${tempMax}${tempMaxAlta ? ' — por encima de 37.2°.' : ', dentro del rango normal.'}` },
-        ambProm ? { icono: '🏠', texto: `cuarto a ${ambProm}°C en promedio.` } : null,
-        humProm ? { icono: '💧', texto: `humedad del cuarto: ${humProm}% en promedio.` } : null,
-      ].filter(Boolean),
-    },
-    semana: {
-      emoji: '📊', titulo: 'resumen de la semana', tono: 'neutro',
-      lineas: [
-        { icono: '🌙', texto: `${sueno} con el bebé en cuna esta semana.` },
-        { icono: '🌡️', texto: `temperatura máxima: ${tempMax}${tempMaxAlta ? ' — hubo momentos de calor elevado.' : '.'}` },
-        ambProm ? { icono: '🏠', texto: `cuarto en promedio a ${ambProm}°C.` } : null,
-        humProm ? { icono: '💧', texto: `humedad promedio: ${humProm}%.` }      : null,
-      ].filter(Boolean),
-    },
-    mes: {
-      emoji: '📈', titulo: 'resumen del mes', tono,
-      lineas: [
-        { icono: '🌙', texto: `tiempo total en cuna este mes: ${sueno}.` },
-        { icono: '🌡️', texto: `temperatura máxima registrada: ${tempMax}${tempMaxAlta ? ' — revisar condiciones del cuarto.' : ', sin picos preocupantes.'}` },
-        ambProm ? { icono: '🏠', texto: `cuarto promedió ${ambProm}°C.` }        : null,
-        humProm ? { icono: '💧', texto: `humedad mensual promedio: ${humProm}%.` } : null,
-      ].filter(Boolean),
-    },
-  };
-
-  return base[filtro];
-};
-
-const TONO_COLORS = {
-  positivo: { bg: C.successBg, border: C.menta,    titulo: C.successText        },
-  neutro:   { bg: '#F5F0E8',   border: '#E0D5C0',  titulo: Colors.textSecondary },
-  alerta:   { bg: C.warnBg,    border: C.amarillo, titulo: C.warnText           },
-};
-
-const ResumenCard = ({ filtro, stats }) => {
-  const resumen = generarResumen(filtro, stats);
-  const colores = TONO_COLORS[resumen.tono];
-  return (
-    <View style={[rs.card, { backgroundColor: colores.bg, borderColor: colores.border }]}>
-      <View style={rs.header}>
-        <Text style={rs.emoji}>{resumen.emoji}</Text>
-        <View style={rs.headerTexts}>
-          <Text style={[rs.titulo, { color: colores.titulo }]}>{resumen.titulo}</Text>
-          <Text style={[rs.subtitulo, { color: Colors.textTertiary }]}>resumen · {filtro}</Text>
-        </View>
-      </View>
-      <View style={[rs.divider, { backgroundColor: colores.border }]} />
-      {resumen.lineas.map((linea, i) => (
-        <View key={i} style={rs.lineaRow}>
-          <Text style={rs.lineaIcono}>{linea.icono}</Text>
-          <Text style={[rs.lineaTexto, { color: Colors.textSecondary }]}>{linea.texto}</Text>
-        </View>
-      ))}
-    </View>
   );
 };
 
@@ -253,54 +356,149 @@ const EmptyState = ({ emoji = '🔍', texto, hint, errorColor }) => (
 // TAB: STATS
 // ═══════════════════════════════════════════════════════════════════════════
 const StatsTab = () => {
-  const [filtro, setFiltro] = useState('hoy');
-  const { statsHoy, statsSemana, statsMes } = useSensor();
-  const stats  = { hoy: statsHoy, semana: statsSemana, mes: statsMes }[filtro];
-  const puntos = stats?.puntos ?? [];
+  const [filtroTipo, setFiltroTipo] = useState('hoy');
+  const [fechaDia,   setFechaDia  ] = useState(new Date());
+  const [fechaDesde, setFechaDesde] = useState(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d; });
+  const [fechaHasta, setFechaHasta] = useState(new Date());
+  const [picker,     setPicker    ] = useState(null);
 
-  const TARJETAS = [
-    { label: 'bebé en cuna',   value: stats?.sueno   ?? '—',                         highlight: false,              icon: '🌙' },
-    { label: 'temp. máx.',     value: stats?.tempMax ?? '—',                         highlight: stats?.tempMaxAlta, icon: '🌡️' },
-    { label: 'temp. ambiente', value: stats?.ambProm ? `${stats.ambProm}°C` : '—',  highlight: false,              icon: '🏠' },
-    { label: 'humedad',        value: stats?.humProm ? `${stats.humProm}%`  : '—',  highlight: false,              icon: '💧' },
-  ];
+  const rango = useMemo(() => {
+    const ahora = Date.now();
+    const hoyInicio = new Date(); hoyInicio.setHours(0, 0, 0, 0);
+    switch (filtroTipo) {
+      case 'hoy':
+        return { desde: hoyInicio.getTime(), hasta: ahora };
+      case 'semana':
+        return { desde: ahora - 7  * 86400000, hasta: ahora };
+      case 'mes':
+        return { desde: ahora - 30 * 86400000, hasta: ahora };
+      case 'dia': {
+        const d = new Date(fechaDia); d.setHours(0, 0, 0, 0);
+        return { desde: d.getTime(), hasta: d.getTime() + 86400000 - 1 };
+      }
+      case 'rango': {
+        const d = new Date(fechaDesde); d.setHours(0, 0, 0, 0);
+        const h = new Date(fechaHasta); h.setHours(23, 59, 59, 999);
+        return { desde: d.getTime(), hasta: h.getTime() };
+      }
+      default:
+        return { desde: hoyInicio.getTime(), hasta: ahora };
+    }
+  }, [filtroTipo, fechaDia, fechaDesde, fechaHasta]);
+
+  const { porDia, porHora }       = useLlantosStats(rango);
+  const { puntosTemp, puntosHum } = useAmbienteHistory(rango);
+  const mostrarPorDia = filtroTipo !== 'dia';
+
+  const onPickerChange = (_, date) => {
+    if (!date) { setPicker(null); return; }
+    if (picker === 'dia')   setFechaDia(date);
+    if (picker === 'desde') setFechaDesde(date);
+    if (picker === 'hasta') setFechaHasta(date);
+    if (Platform.OS === 'android') setPicker(null);
+  };
 
   return (
     <ScrollView contentContainerStyle={s.tabContent}>
-      <View style={s.filtrosRow}>
-        {['hoy', 'semana', 'mes'].map(f => (
-          <TouchableOpacity key={f}
-            style={[s.filtroBtn, { backgroundColor: filtro === f ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
-            onPress={() => setFiltro(f)}>
-            <Text style={[s.filtroLabel, { color: filtro === f ? '#F5F0E8' : Colors.textSecondary }]}>{f}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
 
-      <View style={s.statsGrid}>
-        {TARJETAS.map(item => (
-          <View key={item.label} style={[s.statCard, { backgroundColor: Colors.bgCard }]}>
-            <Text style={s.statIcon}>{item.icon}</Text>
-            <Text style={[s.statLabel, { color: Colors.textSecondary }]}>{item.label}</Text>
-            <Text style={[s.statValue, { color: item.highlight ? '#E05020' : Colors.brown }]}>{item.value}</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={s.filtrosRowH}>
+          {['hoy', 'semana', 'mes', 'día', 'rango'].map(f => {
+            const key = f === 'día' ? 'dia' : f;
+            return (
+              <TouchableOpacity key={key}
+                style={[s.filtroBtn, { backgroundColor: filtroTipo === key ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
+                onPress={() => setFiltroTipo(key)}>
+                <Text style={[s.filtroLabel, { color: filtroTipo === key ? '#F5F0E8' : Colors.textSecondary }]}>{f}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
+
+      {filtroTipo === 'dia' && (
+        <TouchableOpacity
+          style={[s.dateRow, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}
+          onPress={() => setPicker('dia')}>
+          <Text style={[s.dateLabel, { color: Colors.textSecondary }]}>fecha</Text>
+          <Text style={[s.dateValue, { color: Colors.brown }]}>{fmtFecha(fechaDia)}</Text>
+        </TouchableOpacity>
+      )}
+
+      {filtroTipo === 'rango' && (
+        <View style={[s.rangoBox, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}>
+          <TouchableOpacity style={s.rangoRow} onPress={() => setPicker('desde')}>
+            <Text style={[s.dateLabel, { color: Colors.textSecondary }]}>desde</Text>
+            <Text style={[s.dateValue, { color: Colors.brown }]}>{fmtFecha(fechaDesde)}</Text>
+          </TouchableOpacity>
+          <View style={[s.rangoDivider, { backgroundColor: Colors.brownPale }]} />
+          <TouchableOpacity style={s.rangoRow} onPress={() => setPicker('hasta')}>
+            <Text style={[s.dateLabel, { color: Colors.textSecondary }]}>hasta</Text>
+            <Text style={[s.dateValue, { color: Colors.brown }]}>{fmtFecha(fechaHasta)}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {picker !== null && Platform.OS === 'android' && (
+        <DateTimePicker
+          value={picker === 'dia' ? fechaDia : picker === 'desde' ? fechaDesde : fechaHasta}
+          mode="date" maximumDate={new Date()} onChange={onPickerChange}
+        />
+      )}
+
+      {picker !== null && Platform.OS === 'ios' && (
+        <Modal transparent animationType="fade" onRequestClose={() => setPicker(null)}>
+          <TouchableOpacity style={s.pickerOverlay} activeOpacity={1} onPress={() => setPicker(null)}>
+            <View style={s.pickerCard}>
+              <DateTimePicker
+                value={picker === 'dia' ? fechaDia : picker === 'desde' ? fechaDesde : fechaHasta}
+                mode="date" display="inline" maximumDate={new Date()}
+                accentColor={Colors.brown} themeVariant="light"
+                onChange={onPickerChange} style={{ width: '100%' }}
+              />
+              <TouchableOpacity
+                style={[s.pickerConfirm, { backgroundColor: Colors.brown }]}
+                onPress={() => setPicker(null)}>
+                <Text style={{ color: '#F5F0E8', fontWeight: '600', fontSize: 15 }}>listo</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {mostrarPorDia && (
+        <View style={[s.chartBox, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}>
+          <View style={s.chartHeader}>
+            <Text style={[s.sectionLabel, { color: Colors.textSecondary }]}>llantos por día</Text>
           </View>
-        ))}
+          <BarChart datos={porDia} mensajeVacio="sin llantos en este período 🌙" />
+        </View>
+      )}
+
+      <View style={[s.chartBox, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}>
+        <View style={s.chartHeader}>
+          <Text style={[s.sectionLabel, { color: Colors.textSecondary }]}>llantos por hora</Text>
+          <Text style={[s.legendLabel, { color: Colors.textTertiary }]}>0h – 23h</Text>
+        </View>
+        <BarChart datos={porHora} mensajeVacio="sin llantos registrados 🌙" />
       </View>
 
       <View style={[s.chartBox, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}>
         <View style={s.chartHeader}>
-          <Text style={[s.sectionLabel, { color: Colors.textSecondary }]}>zona caliente</Text>
-          <View style={s.chartLegend}>
-            <View style={[s.legendDot, { backgroundColor: Colors.brownPale }]} />
-            <Text style={[s.legendLabel, { color: Colors.textTertiary }]}>37.0°</Text>
-            <View style={[s.legendDot, { backgroundColor: C.amarillo }]} />
-            <Text style={[s.legendLabel, { color: Colors.textTertiary }]}>37.2°</Text>
-          </View>
+          <Text style={[s.sectionLabel, { color: Colors.textSecondary }]}>temperatura del cuarto</Text>
         </View>
-        <TempChart puntos={puntos} />
+        <LineChart puntos={puntosTemp} minVal={10} maxVal={35}
+          colorLinea="#3a5a8a" minIdeal={18} maxIdeal={22} unidad="°" />
       </View>
 
-      <ResumenCard filtro={filtro} stats={stats} />
+      <View style={[s.chartBox, { backgroundColor: Colors.bgCard, borderColor: Colors.brownPale }]}>
+        <View style={s.chartHeader}>
+          <Text style={[s.sectionLabel, { color: Colors.textSecondary }]}>humedad del cuarto</Text>
+        </View>
+        <LineChart puntos={puntosHum} minVal={0} maxVal={100}
+          colorLinea="#4a8ab0" minIdeal={40} maxIdeal={60} unidad="%" />
+      </View>
+
     </ScrollView>
   );
 };
@@ -310,7 +508,7 @@ const StatsTab = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 const DiarioTab = () => {
   const [offset, setOffset] = useState(0);
-  const MIN = -6;
+  const MIN     = -6;
   const isoDate = offsetToIso(offset);
   const label   = isoToLabel(isoDate);
   const { eventos, error } = useEventosDia(isoDate);
@@ -353,12 +551,10 @@ const DiarioTab = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 // TAB: ALERTAS
 // ═══════════════════════════════════════════════════════════════════════════
-
-// ← filtroInicial: recibe 'llanto' cuando se navega desde Inicio
 const AlertasTab = ({ filtroInicial = 'todos' }) => {
   const [filtro, setFiltro] = useState(filtroInicial);
-  const { alertas, error } = useAlertas();
-  const lista = !alertas ? [] : filtro === 'todos' ? alertas : alertas.filter(a => a.cat === filtro);
+  const { alertas, error }  = useAlertas();
+  const lista = !alertas ? [] : filtro === 'todos' ? alertas : alertas.filter(al => al.cat === filtro);
 
   return (
     <ScrollView contentContainerStyle={s.tabContent}>
@@ -398,11 +594,18 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 // CONTENEDOR PRINCIPAL
 // ═══════════════════════════════════════════════════════════════════════════
-export default function Historial() {
+export default function Historial({ navigation }) {
   const route = useRoute();
-  // tab y filtro opcionales — vienen cuando se navega desde Inicio:
-  // navigation.navigate('historial', { tab: 'alertas', filtro: 'llanto' })
-  const [activeTab, setActiveTab] = useState(route.params?.tab ?? 'stats');
+  const [activeTab,     setActiveTab    ] = useState(route.params?.tab    ?? 'stats');
+  const [filtroAlertas, setFiltroAlertas] = useState(route.params?.filtro ?? 'todos');
+
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.tab) setActiveTab(route.params.tab);
+      setFiltroAlertas(route.params?.filtro ?? 'todos');
+      navigation.setParams({ tab: undefined, filtro: undefined });
+    }, [route.params?.tab, route.params?.filtro])
+  );
 
   return (
     <SafeAreaView style={[s.safe, { backgroundColor: Colors.bg }]} edges={['top']}>
@@ -422,7 +625,7 @@ export default function Historial() {
 
       {activeTab === 'stats'   && <StatsTab />}
       {activeTab === 'diario'  && <DiarioTab />}
-      {activeTab === 'alertas' && <AlertasTab filtroInicial={route.params?.filtro} />}
+      {activeTab === 'alertas' && <AlertasTab filtroInicial={filtroAlertas} />}
     </SafeAreaView>
   );
 }
@@ -438,18 +641,24 @@ const s = StyleSheet.create({
   tabBtn:        { flex: 1, paddingVertical: 8, borderRadius: 999, alignItems: 'center' },
   tabLabel:      { fontSize: 13, fontWeight: '500' },
   tabContent:    { padding: 16, gap: 12, paddingBottom: 100 },
-  filtrosRow:    { flexDirection: 'row', gap: 8 },
   filtrosRowH:   { flexDirection: 'row', gap: 8, paddingRight: 16 },
   filtroBtn:     { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
   filtroLabel:   { fontSize: 13, fontWeight: '500' },
-  statsGrid:     { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  statCard:      { width: '47.5%', borderRadius: 12, padding: 14, gap: 2 },
-  statIcon:      { fontSize: 16, marginBottom: 2 },
-  statLabel:     { fontSize: 11 },
-  statValue:     { fontSize: 24, fontWeight: '600', letterSpacing: -0.5 },
+
+  dateRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderRadius: 12, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 12 },
+  rangoBox:      { borderRadius: 12, borderWidth: 1, overflow: 'hidden' },
+  rangoRow:      { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 },
+  rangoDivider:  { height: 1, marginHorizontal: 16 },
+  dateLabel:     { fontSize: 12, fontWeight: '500' },
+  dateValue:     { fontSize: 14, fontWeight: '600' },
+
+  pickerOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  pickerCard:    { backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, gap: 12 },
+  pickerConfirm: { borderRadius: 12, padding: 14, alignItems: 'center' },
+
   chartBox:      { borderRadius: 14, borderWidth: 1, padding: 14, gap: 8 },
   chartHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  sectionLabel:  { fontSize: 13 },
+  sectionLabel:  { fontSize: 13, fontWeight: '500', color: Colors.textSecondary },
   chartLegend:   { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendDot:     { width: 8, height: 8, borderRadius: 4 },
   legendLabel:   { fontSize: 10 },
@@ -472,17 +681,4 @@ const s = StyleSheet.create({
   emptyState:    { alignItems: 'center', paddingVertical: 40 },
   emptyText:     { fontSize: 13, textAlign: 'center' },
   emptyHint:     { fontSize: 11, textAlign: 'center', marginTop: 4, paddingHorizontal: 24 },
-});
-
-const rs = StyleSheet.create({
-  card:        { borderRadius: 16, borderWidth: 1, padding: 16, gap: 10 },
-  header:      { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  emoji:       { fontSize: 28 },
-  headerTexts: { gap: 2 },
-  titulo:      { fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
-  subtitulo:   { fontSize: 11 },
-  divider:     { height: 1, borderRadius: 1 },
-  lineaRow:    { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  lineaIcono:  { fontSize: 14, marginTop: 1 },
-  lineaTexto:  { flex: 1, fontSize: 13, lineHeight: 19 },
 });
