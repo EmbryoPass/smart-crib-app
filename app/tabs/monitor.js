@@ -373,10 +373,7 @@ export default function Monitor({route, navigation}) {
         onPress={() => setCamaraExpandida(true)}
         activeOpacity={0.9}
       >
-        <View style={styles.bebeDetectado}>
-          <View style={styles.bebeDetectadoDot} />
-          <Text style={styles.bebeDetectadoText}>bebé detectado</Text>
-        </View>
+
 
         {/* ── NUEVO: stream en miniatura si hay IP, placeholder si no ── */}
         {ipActiva ? (
@@ -401,10 +398,6 @@ export default function Monitor({route, navigation}) {
           </View>
         )}
 
-        <View style={styles.liveBadge}>
-          <View style={[styles.liveDot, modoIR && styles.liveDotIR]} />
-          <Text style={[styles.liveText, modoIR && styles.liveTextIR]}>en vivo</Text>
-        </View>
       </TouchableOpacity>
 
       {/* Botones modo cámara */}
@@ -485,7 +478,6 @@ export default function Monitor({route, navigation}) {
                     {tendenciaConfig.texto}
                   </Text>
                 </View>
-                <Text style={styles.ultimaLecturaText}>{ultimaLectura}</Text>
               </View>
             </View>
             <Text style={styles.expandirText}>toca para ver el mapa completo →</Text>
@@ -538,9 +530,6 @@ export default function Monitor({route, navigation}) {
               </View>
             </>
           )}
-          <Text style={styles.ambienteHora}>
-            {ambienteConectado ? 'última lectura hace unos segundos' : 'ESP32 sin conexión'}
-          </Text>
         </View>
 
         {/* Humedad */}
@@ -578,9 +567,6 @@ export default function Monitor({route, navigation}) {
               </View>
             </>
           )}
-          <Text style={styles.ambienteHora}>
-            {ambienteConectado ? 'última lectura hace unos segundos' : 'ESP32 sin conexión'}
-          </Text>
         </View>
 
       </ScrollView>
@@ -613,11 +599,6 @@ const styles = StyleSheet.create({
   bebeDetectado:           { position: 'absolute', top: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(181,216,168,0.18)', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 99 },
   bebeDetectadoDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: '#b5d8a8' },
   bebeDetectadoText:       { fontSize: 13, color: '#b5d8a8', fontWeight: '500' },
-  liveBadge:               { position: 'absolute', bottom: 12, right: 12, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 },
-  liveDot:                 { width: 5, height: 5, borderRadius: 3, backgroundColor: '#b5d8a8' },
-  liveDotIR:               { backgroundColor: '#44dd44' },
-  liveText:                { fontSize: 12, color: '#b5d8a8' },
-  liveTextIR:              { color: '#44dd44' },
 
   // Botones modo
   botonesRow:              { flexDirection: 'row', gap: 10, padding: 12, paddingBottom: 6 },

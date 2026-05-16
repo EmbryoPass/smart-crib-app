@@ -1,208 +1,277 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
+// app/tabs/ajustes.js — Capullo App
+import { useState, useEffect } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity,
+  TextInput, ScrollView, Alert,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { getDatabase, ref, onValue, set } from 'firebase/database';
+import { auth, signOut } from '../constants/firebase';
+import { useSensor } from '../constants/SensorContext';
 import Colors from '../constants/colors';
 
-export default function Ajustes() {
-  const [tab, setTab] = useState('conexion');
+// ─── Hook: nombre del cuidador ─────────────────────────────────────────────
+const useNombreCuidador = () => {
+  const [nombre, setNombre] = useState('');
 
-  const renderTabs = () => (
-    <View style={styles.tabs}>
-      {['conexion', 'notif', 'apariencia'].map((t) => (
-        <TouchableOpacity
-          key={t}
-          style={[styles.tab, tab === t && styles.tabActive]}
-          onPress={() => setTab(t)}
-        >
-          <Text style={[styles.tabText, tab === t && styles.tabTextActive]}>
-            {t}
-          </Text>
-        </TouchableOpacity>
-      ))}
+  useEffect(() => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const db = getDatabase();
+    return onValue(ref(db, `usuarios/${uid}/nombre`), (snap) => {
+      setNombre(snap.val() ?? '');
+    });
+  }, []);
+
+  return [nombre, setNombre];
+};
+
+// ─── Hook: estado de cámaras ───────────────────────────────────────────────
+const useCamaras = () => {
+  const [dayIP, setDayIP] = useState(null);
+  const [irIP,  setIrIP ] = useState(null);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const u1 = onValue(ref(db, '/camera/dayIP'), s => setDayIP(s.val()));
+    const u2 = onValue(ref(db, '/camera/irIP'),  s => setIrIP(s.val()));
+    return () => { u1(); u2(); };
+  }, []);
+
+  return { dayIP, irIP };
+};
+
+// ─── Componentes ──────────────────────────────────────────────────────────
+const SeccionTitulo = ({ texto }) => (
+  <Text style={s.seccionTitulo}>{texto}</Text>
+);
+
+const InfoRow = ({ icono, label, valor, valorColor }) => (
+  <View style={s.row}>
+    <View style={s.rowLeft}>
+      <View style={s.iconWrap}>
+        <Ionicons name={icono} size={16} color={Colors.brownLight} />
+      </View>
+      <Text style={s.rowLabel}>{label}</Text>
     </View>
-  );
+    <Text style={[s.rowValor, valorColor && { color: valorColor }]}>{valor}</Text>
+  </View>
+);
 
-  const renderConexion = () => (
-    <>
-      <Card title="estado wifi" value="Casa_Red" badge="activo" />
-      <Card title="IP del ESP32" value="192.168.4.1" />
-      <SwitchCard title="modo Access Point" subtitle="sin router externo" />
-      <Card title="intervalo sensor" value="5 seg" />
-      <Button text="probar conexión" />
-    </>
-  );
+// ═══════════════════════════════════════════════════════════════════════════
+export default function Ajustes() {
+  const [nombre, setNombre]     = useNombreCuidador();
+  const [editando, setEditando] = useState(false);
+  const [borrador, setBorrador] = useState('');
+  const { termicoConectado }    = useSensor();
+  const { dayIP, irIP }         = useCamaras();
 
-  const renderNotif = () => (
-    <>
-      <SwitchCard title="llanto detectado" subtitle="notificación inmediata" />
-      <SwitchCard title="temperatura alta" subtitle="umbral: 38°C" />
-      <SwitchCard title="cambio de altura" subtitle="al ajustar manualmente" />
-      <SwitchCard title="no molestar" subtitle="23:00 — 07:00" />
-    </>
-  );
+  const email = auth.currentUser?.email ?? '—';
 
-  const renderApariencia = () => (
-    <>
-      <SwitchCard title="modo noche" subtitle="pantalla oscura y tenue" />
-      <SwitchCard title="activación automática" subtitle="21:00 — 07:00" />
-    </>
-  );
+  const iniciarEdicion = () => {
+    setBorrador(nombre);
+    setEditando(true);
+  };
 
-  const renderContent = () => {
-    if (tab === 'conexion') return renderConexion();
-    if (tab === 'notif') return renderNotif();
-    return renderApariencia();
+  const guardarNombre = async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const trimmed = borrador.trim();
+    if (!trimmed) return;
+    try {
+      await set(ref(getDatabase(), `usuarios/${uid}/nombre`), trimmed);
+      setEditando(false);
+    } catch (e) {
+      Alert.alert('Error', 'No se pudo guardar el nombre.');
+    }
+  };
+
+  const cancelarEdicion = () => {
+    setEditando(false);
+    setBorrador('');
+  };
+
+  const cerrarSesion = () => {
+    Alert.alert(
+      'cerrar sesión',
+      '¿estás segur@ de que quieres salir?',
+      [
+        { text: 'cancelar', style: 'cancel' },
+        { text: 'salir', style: 'destructive', onPress: () => signOut(auth) },
+      ]
+    );
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <View style={styles.container}>
-        <Text style={styles.title}>ajustes</Text>
-
-        {renderTabs()}
-
-        <View style={styles.content}>
-          {renderContent()}
-        </View>
+    <SafeAreaView style={s.safe} edges={['top']}>
+      <View style={s.header}>
+        <Text style={s.title}>ajustes</Text>
       </View>
+
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+
+        {/* ── Cuidador ── */}
+        <SeccionTitulo texto="cuidador" />
+        <View style={s.card}>
+
+          {/* Avatar con iniciales */}
+          <View style={s.avatarRow}>
+            <View style={s.avatar}>
+              <Text style={s.avatarText}>
+                {nombre ? nombre.charAt(0).toUpperCase() : '?'}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.avatarNombre}>{nombre || 'sin nombre'}</Text>
+              <Text style={s.avatarEmail}>{email}</Text>
+            </View>
+            {!editando && (
+              <TouchableOpacity onPress={iniciarEdicion} style={s.editBtn}>
+                <Ionicons name="pencil-outline" size={16} color={Colors.brownLight} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Editor inline */}
+          {editando && (
+            <View style={s.editorWrap}>
+              <TextInput
+                style={s.input}
+                value={borrador}
+                onChangeText={setBorrador}
+                placeholder="tu nombre"
+                placeholderTextColor={Colors.textTertiary}
+                autoFocus
+                maxLength={30}
+              />
+              <View style={s.editorBtns}>
+                <TouchableOpacity style={s.btnCancelar} onPress={cancelarEdicion}>
+                  <Text style={[s.btnText, { color: Colors.textSecondary }]}>cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={s.btnGuardar} onPress={guardarNombre}>
+                  <Text style={[s.btnText, { color: '#F5F0E8' }]}>guardar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* ── Dispositivo ── */}
+        <SeccionTitulo texto="dispositivo" />
+        <View style={s.card}>
+          <InfoRow
+            icono="hardware-chip-outline"
+            label="ESP32"
+            valor={termicoConectado ? 'conectado' : 'sin conexión'}
+            valorColor={termicoConectado ? Colors.successDark : Colors.dangerDark}
+          />
+          <View style={s.divider} />
+          <InfoRow
+            icono="sunny-outline"
+            label="cámara día"
+            valor={dayIP ?? 'sin señal'}
+            valorColor={dayIP ? Colors.textSecondary : Colors.textTertiary}
+          />
+          <View style={s.divider} />
+          <InfoRow
+            icono="moon-outline"
+            label="cámara IR"
+            valor={irIP ?? 'sin señal'}
+            valorColor={irIP ? Colors.textSecondary : Colors.textTertiary}
+          />
+        </View>
+
+        {/* ── Cuenta ── */}
+        <SeccionTitulo texto="cuenta" />
+        <TouchableOpacity style={s.btnSalir} onPress={cerrarSesion} activeOpacity={0.8}>
+          <Ionicons name="log-out-outline" size={18} color="#C05050" />
+          <Text style={s.btnSalirText}>cerrar sesión</Text>
+        </TouchableOpacity>
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* 🔹 COMPONENTES */
+// ═══════════════════════════════════════════════════════════════════════════
+const s = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: Colors.bg },
+  header: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  title:  { fontSize: 22, fontWeight: '600', letterSpacing: -0.5, color: Colors.brown },
+  scroll: { paddingHorizontal: 20, paddingTop: 4 },
 
-function Card({ title, value, badge }) {
-  return (
-    <View style={styles.card}>
-      <View>
-        <Text style={styles.cardTitle}>{title}</Text>
-        {value && <Text style={styles.cardValue}>{value}</Text>}
-      </View>
-      {badge && <Text style={styles.badge}>{badge}</Text>}
-    </View>
-  );
-}
-
-function SwitchCard({ title, subtitle }) {
-  const [value, setValue] = useState(true);
-
-  return (
-    <View style={styles.card}>
-      <View>
-        <Text style={styles.cardTitle}>{title}</Text>
-        <Text style={styles.cardSub}>{subtitle}</Text>
-      </View>
-      <Switch
-        value={value}
-        onValueChange={setValue}
-        trackColor={{ true: Colors.success, false: '#ccc' }}
-        thumbColor={'#fff'}
-      />
-    </View>
-  );
-}
-
-function Button({ text }) {
-  return (
-    <TouchableOpacity style={styles.button}>
-      <Text style={styles.buttonText}>{text}</Text>
-    </TouchableOpacity>
-  );
-}
-
-/* 🔹 ESTILOS */
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: Colors.bg },
-
-  container: {
-    flex: 1,
-    padding: 16,
-  },
-
-  title: {
-    fontSize: 24,
-    color: Colors.brown,
-    marginBottom: 10,
-  },
-
-  /* Tabs */
-  tabs: {
-    flexDirection: 'row',
-    marginBottom: 16,
-  },
-
-  tab: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    marginRight: 8,
-    backgroundColor: Colors.bgSurface,
-  },
-
-  tabActive: {
-    backgroundColor: Colors.brownLight,
-  },
-
-  tabText: {
-    color: Colors.textSecondary,
-  },
-
-  tabTextActive: {
-    color: Colors.brown,
-    fontWeight: '500',
-  },
-
-  /* Cards */
-  content: {
-    gap: 12,
+  seccionTitulo: {
+    fontSize: 11, fontWeight: '600', color: Colors.textTertiary,
+    letterSpacing: 0.8, textTransform: 'uppercase',
+    marginTop: 20, marginBottom: 8, marginLeft: 4,
   },
 
   card: {
-    backgroundColor: Colors.bgCard,
-    padding: 14,
-    borderRadius: 14,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderColor: Colors.brownPale,
-    borderWidth: 1,
+    backgroundColor: Colors.bgCard, borderRadius: 18,
+    borderWidth: 1, borderColor: Colors.brownPale,
+    overflow: 'hidden',
   },
 
-  cardTitle: {
-    color: Colors.textPrimary,
-    fontSize: 14,
+  // Avatar
+  avatarRow:   { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+  avatar:      {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: Colors.brownPale,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarText:  { fontSize: 20, fontWeight: '700', color: Colors.brown },
+  avatarNombre:{ fontSize: 15, fontWeight: '600', color: Colors.brown },
+  avatarEmail: { fontSize: 12, color: Colors.textTertiary, marginTop: 2 },
+  editBtn:     {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: Colors.bgSurface,
+    alignItems: 'center', justifyContent: 'center',
   },
 
-  cardValue: {
-    color: Colors.textSecondary,
-    fontSize: 13,
+  // Editor
+  editorWrap: { paddingHorizontal: 16, paddingBottom: 14, gap: 10 },
+  input: {
+    backgroundColor: Colors.bgSurface, borderRadius: 12,
+    borderWidth: 1, borderColor: Colors.brownPale,
+    paddingHorizontal: 14, paddingVertical: 10,
+    fontSize: 15, color: Colors.brown,
   },
-
-  cardSub: {
-    color: Colors.textTertiary,
-    fontSize: 12,
-  },
-
-  badge: {
-    backgroundColor: Colors.success,
-    color: Colors.successDark,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-    fontSize: 12,
-  },
-
-  /* Button */
-  button: {
-    backgroundColor: Colors.yellow,
-    padding: 14,
-    borderRadius: 14,
+  editorBtns:  { flexDirection: 'row', gap: 8 },
+  btnCancelar: {
+    flex: 1, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.bgSurface,
     alignItems: 'center',
   },
-
-  buttonText: {
-    color: Colors.brown,
-    fontWeight: '500',
+  btnGuardar:  {
+    flex: 1, paddingVertical: 10, borderRadius: 10,
+    backgroundColor: Colors.brown,
+    alignItems: 'center',
   },
+  btnText: { fontSize: 14, fontWeight: '500' },
+
+  // Info rows
+  row: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingHorizontal: 16, paddingVertical: 13,
+  },
+  rowLeft:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconWrap: {
+    width: 28, height: 28, borderRadius: 8,
+    backgroundColor: Colors.bgSurface,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  rowLabel: { fontSize: 14, color: Colors.brown },
+  rowValor: { fontSize: 13, color: Colors.textSecondary, fontWeight: '500' },
+  divider:  { height: 1, backgroundColor: Colors.brownPale, marginHorizontal: 16 },
+
+  // Cerrar sesión
+  btnSalir: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: '#FCEAEA', borderRadius: 18,
+    borderWidth: 1, borderColor: '#F0BFBF',
+    padding: 16,
+  },
+  btnSalirText: { fontSize: 15, fontWeight: '600', color: '#C05050' },
 });

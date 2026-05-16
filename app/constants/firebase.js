@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, push } from 'firebase/database'; // ← push agregado
+import { getDatabase, ref, onValue, push, set } from 'firebase/database';
 import { initializeAuth, getReactNativePersistence, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -21,7 +21,7 @@ const auth = initializeAuth(app, {
 });
 
 export {
-  db, ref, onValue, push, // ← push agregado
+  db, ref, onValue, push, set,
   auth,
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
