@@ -72,6 +72,19 @@ const fmtHora = (ts) => {
 const fmtFecha = (date) =>
   `${date.getDate()} ${MS[date.getMonth()]} ${date.getFullYear()}`;
 
+// Para alertas: muestra "hoy 14:30", "ayer 09:15" o "12 may 08:00"
+const fmtFechaHora = (ts) => {
+  if (!ts || ts === 0) return null;
+  const d    = new Date(ts);
+  const hora = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  const hoy  = new Date(); hoy.setHours(0, 0, 0, 0);
+  const ayer = new Date(hoy); ayer.setDate(ayer.getDate() - 1);
+  const dia  = new Date(d);  dia.setHours(0, 0, 0, 0);
+  if (dia.getTime() === hoy.getTime())  return `hoy ${hora}`;
+  if (dia.getTime() === ayer.getTime()) return `ayer ${hora}`;
+  return `${d.getDate()} ${MS[d.getMonth()]} ${hora}`;
+};
+
 // ─── Hook: llantos — retorna porDia y porHora según rango ─────────────────
 const useLlantosStats = ({ desde, hasta }) => {
   const [porDia,  setPorDia ] = useState([]);
@@ -160,7 +173,7 @@ const useEventosDia = (isoDate) => {
           const meta = TIPO_META[v.tipo] ?? { color: Colors.brownPale, bg: Colors.bgCard };
           return { id, tipo: v.tipo ?? 'evento', detalle: v.detalle ?? '', color: meta.color, bg: meta.bg, ts: v.ts ?? 0 };
         })
-        .sort((a, b) => a.ts - b.ts);
+        .sort((a, b) => b.ts - a.ts);   // más reciente arriba
       setEventos(arr);
       setError(null);
     }, (err) => setError(err));
@@ -539,7 +552,12 @@ const DiarioTab = () => {
             {idx < eventos.length - 1 && <View style={[s.timelineLine, { backgroundColor: Colors.brownPale }]} />}
           </View>
           <View style={[s.eventoCard, { backgroundColor: ev.bg, borderColor: ev.color + 'AA' }]}>
-            <Text style={[s.eventoTipo, { color: Colors.brown }]}>{ev.tipo}</Text>
+            <View style={s.eventoHeader}>
+              <Text style={[s.eventoTipo, { color: Colors.brown }]}>{ev.tipo}</Text>
+              {ev.ts > 0 && (
+                <Text style={[s.eventoHora, { color: Colors.textTertiary }]}>{fmtHora(ev.ts)}</Text>
+              )}
+            </View>
             <Text style={[s.eventoDetalle, { color: Colors.textSecondary }]}>{ev.detalle}</Text>
           </View>
         </View>
@@ -573,15 +591,20 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
       {alertas === null && !error && <ActivityIndicator color={Colors.brown} style={{ marginTop: 32 }} />}
       {error && <EmptyState emoji="⚠️" texto="error al cargar alertas" errorColor={C.dangerText} />}
 
-      {lista.map(alerta => (
-        <View key={alerta.id} style={[s.alertaCard, { backgroundColor: alerta.bg, borderColor: alerta.color + '80' }]}>
-          <View style={s.alertaHeader}>
-            <Text style={[s.alertaTipo, { color: alerta.color }]}>{alerta.tipo}</Text>
-            {alerta.ts > 0 && <Text style={[s.alertaHora, { color: Colors.textTertiary }]}>{fmtHora(alerta.ts)}</Text>}
+      {lista.map(alerta => {
+        const fechaHora = fmtFechaHora(alerta.ts);
+        return (
+          <View key={alerta.id} style={[s.alertaCard, { backgroundColor: alerta.bg, borderColor: alerta.color + '80' }]}>
+            <View style={s.alertaHeader}>
+              <Text style={[s.alertaTipo, { color: alerta.color }]}>{alerta.tipo}</Text>
+              <Text style={[s.alertaHora, { color: Colors.textTertiary }]}>
+                {fechaHora ?? '—'}
+              </Text>
+            </View>
+            <Text style={[s.alertaDetalle, { color: Colors.textSecondary }]}>{alerta.detalle}</Text>
           </View>
-          <Text style={[s.alertaDetalle, { color: Colors.textSecondary }]}>{alerta.detalle}</Text>
-        </View>
-      ))}
+        );
+      })}
 
       {alertas !== null && lista.length === 0 && !error && (
         <EmptyState emoji="✅"
@@ -671,7 +694,9 @@ const s = StyleSheet.create({
   timelineDot:   { width: 10, height: 10, borderRadius: 5 },
   timelineLine:  { flex: 1, width: 2, marginTop: 4 },
   eventoCard:    { flex: 1, borderRadius: 12, borderWidth: 1, padding: 12, gap: 3 },
+  eventoHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   eventoTipo:    { fontSize: 14, fontWeight: '500' },
+  eventoHora:    { fontSize: 11 },
   eventoDetalle: { fontSize: 12 },
   alertaCard:    { borderRadius: 12, borderWidth: 1, padding: 14, gap: 4 },
   alertaHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
