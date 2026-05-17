@@ -30,18 +30,42 @@ const C = {
   infoText:    '#3A6A9A',
   successBg:   '#EBF7F2',
   successText: '#2A7A5A',
+  // Naranja para temperatura del cuarto
+  naranjaText: '#B85C00',
+  naranjaBg:   '#FEF0E0',
 };
 
 const TIPO_META = {
-  'llanto':          { color: C.rosa,     bg: C.dangerBg },
-  'temp. elevada':   { color: C.amarillo, bg: C.warnBg   },
-  'altura ajustada': { color: C.cielo,    bg: C.infoBg   },
+  // Bebé
+  'llanto': { color: C.infoText, bg: C.infoBg },
+  'temp. elevada':      { color: C.naranjaText, bg: C.naranjaBg },
+  'altura ajustada':    { color: C.infoText,    bg: C.infoBg    },
+  // Normalizaciones de ambiente (positivas)
+  'normalizacion_temp': { color: C.successText, bg: C.successBg },
+  'normalizacion_hum':  { color: C.successText, bg: C.successBg },
+  // Tendencia de temperatura
+  'tendencia_alcista':  { color: C.naranjaText, bg: C.naranjaBg },
+};
+
+// Para eventos de ambiente cuyo `tipo` es un título largo (ej. "El cuarto está muy frío"),
+// inferimos el color por palabras clave.
+const getTipoMeta = (tipo) => {
+  if (TIPO_META[tipo]) return TIPO_META[tipo];
+  const t = tipo.toLowerCase();
+  if (t.includes('normal') || t.includes('ideal') || t.includes('bien'))
+    return { color: C.successText, bg: C.successBg };
+  if (t.includes('muy') || t.includes('críti') || t.includes('!'))
+    return { color: C.dangerText,  bg: C.dangerBg  };
+  if (t.includes('frío') || t.includes('frio') || t.includes('seco') ||
+      t.includes('caliente') || t.includes('húmedo') || t.includes('humedo'))
+    return { color: C.naranjaText, bg: C.naranjaBg };
+  return { color: Colors.brownPale, bg: Colors.bgCard };
 };
 
 const ALERTA_META = {
-  llanto:      { color: C.dangerText, bg: C.dangerBg },
-  temperatura: { color: C.warnText,   bg: C.warnBg   },
-  altura:      { color: C.infoText,   bg: C.infoBg   },
+  llanto:      { color: C.infoText,   bg: C.infoBg   },  // 🔵 azul
+  temperatura: { color: C.naranjaText, bg: C.naranjaBg }, // 🟠 naranja
+  ambiente:    { color: C.dangerText,  bg: C.dangerBg  }, // 🔴 rojo
 };
 
 const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
@@ -170,7 +194,7 @@ const useEventosDia = (isoDate) => {
       if (!snap.exists()) { setEventos([]); return; }
       const arr = Object.entries(snap.val())
         .map(([id, v]) => {
-          const meta = TIPO_META[v.tipo] ?? { color: Colors.brownPale, bg: Colors.bgCard };
+          const meta = getTipoMeta(v.tipo);
           return { id, tipo: v.tipo ?? 'evento', detalle: v.detalle ?? '', color: meta.color, bg: meta.bg, ts: v.ts ?? 0 };
         })
         .sort((a, b) => b.ts - a.ts);   // más reciente arriba
@@ -189,7 +213,7 @@ const useAlertas = () => {
 
   useEffect(() => {
     const db    = getDatabase();
-    const r     = query(ref(db, 'alertas'), orderByChild('ts'), limitToLast(50));
+    const r     = query(ref(db, 'alertas'), orderByChild('ts'), limitToLast(200));
     const unsub = onValue(r, (snap) => {
       if (!snap.exists()) { setAlertas([]); return; }
       const arr = Object.entries(snap.val())
@@ -521,7 +545,7 @@ const StatsTab = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 const DiarioTab = () => {
   const [offset, setOffset] = useState(0);
-  const MIN     = -6;
+  const MIN     = -29;
   const isoDate = offsetToIso(offset);
   const label   = isoToLabel(isoDate);
   const { eventos, error } = useEventosDia(isoDate);
@@ -578,7 +602,7 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
     <ScrollView contentContainerStyle={s.tabContent}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={s.filtrosRowH}>
-          {['todos', 'llanto', 'temperatura'].map(f => (
+          {['todos', 'llanto', 'temperatura', 'ambiente'].map(f => (
             <TouchableOpacity key={f}
               style={[s.filtroBtn, { backgroundColor: filtro === f ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
               onPress={() => setFiltro(f)}>

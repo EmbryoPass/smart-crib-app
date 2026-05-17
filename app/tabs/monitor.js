@@ -4,6 +4,7 @@ import Colors from '../constants/colors';
 import { db, ref, onValue, set } from '../constants/firebase';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, useWindowDimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { useSensor } from '../constants/SensorContext';
 
 // ── Colores del mapa térmico ───────────────────────────────────────────────
 const STOPS = [
@@ -98,22 +99,22 @@ function InfoModal({ visible, info, onClose }) {
 export default function Monitor({route, navigation}) {
   const { width } = useWindowDimensions();
   const cellSize = (width - 32) / 32;
+  // ── Estado de contexto (ya calculado en SensorContext) ──────────────
+  const {
+    tempBebe, bebeDetectado, tendencia,
+    temperatura, humedad,
+    termicoConectado, ambienteConectado,
+  } = useSensor();
+
+  // ── Estado local de esta pantalla ─────────────────────────────────────
   const [modoIR, setModoIR] = useState(false);
   const [camaraExpandida, setCamaraExpandida] = useState(false);
   const [termicoExpandido, setTermicoExpandido] = useState(false);
   const [modalInfo, setModalInfo] = useState(null);
 
-  // ── Estado Firebase ──────────────────────────────────────────────────
+  // ── Estado Firebase exclusivo de Monitor ──────────────────────────────
   const [grid, setGrid] = useState(Array(64).fill('#b3d4ff'));
-  const [tempBebe, setTempBebe] = useState(null);
-  const [bebeDetectado, setBebeDetectado] = useState(false);
-  const [tendencia, setTendencia] = useState('estable');
   const [ultimaLectura, setUltimaLectura] = useState('--');
-  const [temperatura, setTemperatura] = useState(null);
-  const [humedad, setHumedad] = useState(null);
-  const [termicoConectado, setTermicoConectado] = useState(false);
-  const [ambienteConectado, setAmbienteConectado] = useState(false);
-  const [historialTemp, setHistorialTemp] = useState([]);
   const [cameraIp, setCameraIp]     = useState(null);
   const [cameraIpIR, setCameraIpIR] = useState(null);
 
@@ -131,46 +132,18 @@ export default function Monitor({route, navigation}) {
   }, [route.params?.abrirCamara]);
 
   useEffect(() => {
+    // ── /termico — solo necesitamos la grilla visual ─────────────────────
     const termicoRef = ref(db, '/termico');
     const unsubTermico = onValue(termicoRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) { setTermicoConectado(false); return; }
-      setTermicoConectado(true);
+      if (!data) return;
       if (data.grid) {
-        const colores = interpolar32(data.grid);
-        setGrid(colores);
-        setTempBebe(data.promCaliente ? data.promCaliente.toFixed(1) : null);
-      }
-      setBebeDetectado(data.bebeDetectado || false);
-      if (data.max && data.bebeDetectado) {
-        setHistorialTemp(prev => {
-          const nuevo = [...prev, data.max].slice(-20);
-          if (nuevo.length >= 20) {
-            const mitad = Math.floor(nuevo.length / 2);
-            const promReciente = nuevo.slice(mitad).reduce((a,b) => a+b,0) / mitad;
-            const promAnterior = nuevo.slice(0, mitad).reduce((a,b) => a+b,0) / mitad;
-            const diff = promReciente - promAnterior;
-            if (diff > 1.5) setTendencia('subiendo');
-            else if (diff < -1.5) setTendencia('bajando');
-            else setTendencia('estable');
-          }
-          return nuevo;
-        });
-      } else if (!data.bebeDetectado) {
-        setHistorialTemp([]);
-        setTendencia('estable');
+        setGrid(interpolar32(data.grid));
       }
       setUltimaLectura('hace unos segundos');
     });
 
-    const ambienteRef = ref(db, '/ambiente');
-    const unsubAmbiente = onValue(ambienteRef, (snapshot) => {
-      const data = snapshot.val();
-      if (!data) { setAmbienteConectado(false); return; }
-      setAmbienteConectado(true);
-      setTemperatura(data.temperatura);
-      setHumedad(data.humedad);
-    });
+    // /ambiente lo maneja SensorContext — no necesitamos listener aquí
 
     const camDiaRef   = ref(db, '/camera/dayIP');
     const camNocheRef = ref(db, '/camera/irIP');
@@ -179,7 +152,6 @@ export default function Monitor({route, navigation}) {
 
     return () => {
       unsubTermico();
-      unsubAmbiente();
       unsubCamDia();
       unsubCamNoche();
     };
