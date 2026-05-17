@@ -261,7 +261,7 @@ const BarChart = ({ datos, mensajeVacio }) => {
 // ═══════════════════════════════════════════════════════════════════════════
 const LineChart = ({ puntos, minVal, maxVal, colorLinea, minIdeal, maxIdeal, unidad = '' }) => {
   const W = SW - 64, H = 120;
-  const PAD = { t: 18, b: 20, l: 4, r: 36 };
+  const PAD = { t: 18, b: 20, l: 36, r: 20 };
 
   if (!puntos || puntos.length < 2) {
     return (
@@ -306,15 +306,15 @@ const LineChart = ({ puntos, minVal, maxVal, colorLinea, minIdeal, maxIdeal, uni
 
       {/* ── Etiqueta maxIdeal — encima de la línea superior ── */}
       <SvgText
-        x={W - PAD.r + 2} y={yMax + 4}
-        textAnchor="start" fontSize="9" fill={C.successText} fontWeight="600">
+        x={PAD.l - 2} y={yMax + 4}
+        textAnchor="end" fontSize="9" fill={C.successText} fontWeight="600">
         {maxIdeal}{unidad}
       </SvgText>
 
       {/* ── Etiqueta minIdeal — debajo de la línea inferior ── */}
       <SvgText
-        x={W - PAD.r + 2} y={yMin + 9}
-        textAnchor="start" fontSize="9" fill={C.successText} fontWeight="600">
+        x={PAD.l - 2} y={yMin + 9}
+        textAnchor="end" fontSize="9" fill={C.successText} fontWeight="600">
         {minIdeal}{unidad}
       </SvgText>
 

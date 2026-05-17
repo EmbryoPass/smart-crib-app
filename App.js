@@ -2,12 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
-import Svg, { Path, Rect, Circle } from 'react-native-svg';
-import { onAuthStateChanged } from 'firebase/auth';
+import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 
 import Colors from './app/constants/colors';
-import { auth } from './app/constants/firebase';
 import { SensorProvider, useSensor } from './app/constants/SensorContext';
+import AlertaAmbienteBanner from './app/components/AlertaAmbienteBanner';
 import Inicio from './app/tabs/index';
 import Monitor from './app/tabs/monitor';
 import Historial from './app/tabs/historial';
@@ -15,6 +14,8 @@ import Ajustes from './app/tabs/ajustes';
 import InicioSesion from './app/tabs/InicioSesion';
 
 const Tab = createBottomTabNavigator();
+
+// ── Iconos ────────────────────────────────────────────────────────────────
 
 function IconInicio({ color }) {
   return (
@@ -58,6 +59,8 @@ function IconAjustes({ color }) {
     </Svg>
   );
 }
+
+// ── Banner de llanto ──────────────────────────────────────────────────────
 
 function LlantoBanner() {
   const { llantoActivo } = useSensor();
@@ -112,19 +115,34 @@ function LlantoBanner() {
   );
 }
 
+// ── Contenedor de ambos banners ───────────────────────────────────────────
+// Maneja el posicionamiento para que no se traslapen cuando los dos
+// están visibles al mismo tiempo.
+
+const BANNER_HEIGHT = 76; // alto aproximado del LlantoBanner
+
+function Banners() {
+  const { llantoActivo } = useSensor();
+
+  // Cuando el llanto está activo, el banner de ambiente baja para no tapar
+  // el de llanto. Cuando no hay llanto, ambos comparten el mismo top.
+  const ambienteOffset = llantoActivo ? BANNER_HEIGHT + 8 : 0;
+
+  return (
+    <>
+      {/* LlantoBanner siempre encima (zIndex 9999 en su wrapper) */}
+      <LlantoBanner />
+
+      {/* AlertaAmbienteBanner se desplaza hacia abajo si llanto está activo */}
+      <AlertaAmbienteBanner extraTop={ambienteOffset} />
+    </>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────
+
 export default function App() {
-  const [usuario,  setUsuario ] = useState(null);
-  const [cargando, setCargando] = useState(true);
-
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      setUsuario(user ?? null);
-      setCargando(false);
-    });
-    return unsub;
-  }, []);
-
-  if (cargando) return null;
+  const [usuario, setUsuario] = useState(null);
 
   if (!usuario) {
     return <InicioSesion onAuthSuccess={(datos) => setUsuario(datos)} />;
@@ -163,11 +181,16 @@ export default function App() {
             options={{ tabBarIcon: ({ color }) => <IconAjustes color={color} /> }}
           />
         </Tab.Navigator>
-        <LlantoBanner />
+
+        {/* Banners flotantes — siempre encima de las tabs */}
+        <Banners />
+
       </NavigationContainer>
     </SensorProvider>
   );
 }
+
+// ── Estilos ───────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   tabBar: {
@@ -190,7 +213,7 @@ const bannerStyles = StyleSheet.create({
   wrapper: {
     position: 'absolute', left: 16, right: 16,
     top: 55,
-    zIndex: 999, elevation: 10,
+    zIndex: 9999, elevation: 11,  // encima del banner de ambiente
   },
   card: {
     flexDirection: 'row', alignItems: 'center',
