@@ -1,9 +1,9 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useState, useEffect } from 'react';
 import Colors from '../constants/colors';
-import { db, ref, onValue } from '../constants/firebase';
+import { db, ref, onValue, set } from '../constants/firebase';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Modal, useWindowDimensions } from 'react-native';
-import { WebView } from 'react-native-webview'; // ← NUEVO
+import { WebView } from 'react-native-webview';
 
 // ── Colores del mapa térmico ───────────────────────────────────────────────
 const STOPS = [
@@ -49,6 +49,7 @@ function interpolar32(grid8x8) {
   }
   return out;
 }
+
 // ── Info modals ────────────────────────────────────────────────────────────
 const INFO_TERMICO = {
   titulo: 'Sensor térmico',
@@ -96,7 +97,7 @@ function InfoModal({ visible, info, onClose }) {
 // ── Pantalla principal ─────────────────────────────────────────────────────
 export default function Monitor({route, navigation}) {
   const { width } = useWindowDimensions();
-  const cellSize = (width - 32) / 32; // 32px de padding total, 32 celdas
+  const cellSize = (width - 32) / 32;
   const [modoIR, setModoIR] = useState(false);
   const [camaraExpandida, setCamaraExpandida] = useState(false);
   const [termicoExpandido, setTermicoExpandido] = useState(false);
@@ -110,78 +111,67 @@ export default function Monitor({route, navigation}) {
   const [ultimaLectura, setUltimaLectura] = useState('--');
   const [temperatura, setTemperatura] = useState(null);
   const [humedad, setHumedad] = useState(null);
-  const [prevTemp, setPrevTemp] = useState(null);
   const [termicoConectado, setTermicoConectado] = useState(false);
   const [ambienteConectado, setAmbienteConectado] = useState(false);
   const [historialTemp, setHistorialTemp] = useState([]);
-  const [cameraIp, setCameraIp]     = useState(null); // ← NUEVO: IP cámara día
-  const [cameraIpIR, setCameraIpIR] = useState(null); // ← NUEVO: IP cámara IR
+  const [cameraIp, setCameraIp]     = useState(null);
+  const [cameraIpIR, setCameraIpIR] = useState(null);
+
+  // ── Activar/desactivar LED IR desde app ──────────────────────────────
+  const activarModoIR = (activo) => {
+    setModoIR(activo);
+    set(ref(db, '/camara/irActiva'), activo);
+  };
 
   useEffect(() => {
-    // Revisamos si el index mandó el parámetro abrirCamara
     if (route.params?.abrirCamara) {
-      setCamaraExpandida(true); // <--- Esto abre la cámara expandida
-
-      // Limpiamos el parámetro para que no se vuelva a abrir solo 
-      // si el usuario sale y entra a la pestaña después.
+      setCamaraExpandida(true);
       navigation.setParams({ abrirCamara: undefined });
     }
   }, [route.params?.abrirCamara]);
 
   useEffect(() => {
-    // ── Escuchar sensor térmico ──────────────────────────────────────
     const termicoRef = ref(db, '/termico');
     const unsubTermico = onValue(termicoRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) {
-        setTermicoConectado(false);
-        return;
-      }
+      if (!data) { setTermicoConectado(false); return; }
       setTermicoConectado(true);
-
       if (data.grid) {
         const colores = interpolar32(data.grid);
         setGrid(colores);
         setTempBebe(data.promCaliente ? data.promCaliente.toFixed(1) : null);
       }
-
       setBebeDetectado(data.bebeDetectado || false);
-
       if (data.max && data.bebeDetectado) {
-  setHistorialTemp(prev => {
-    const nuevo = [...prev, data.max].slice(-20);
-    if (nuevo.length >= 20) {
-      const mitad = Math.floor(nuevo.length / 2);
-      const promReciente = nuevo.slice(mitad).reduce((a,b) => a+b,0) / mitad;
-      const promAnterior = nuevo.slice(0, mitad).reduce((a,b) => a+b,0) / mitad;
-      const diff = promReciente - promAnterior;
-      if (diff > 1.5) setTendencia('subiendo');
-      else if (diff < -1.5) setTendencia('bajando');
-      else setTendencia('estable');
-    }
-    return nuevo;
-  });
-} else if (!data.bebeDetectado) {
-  setHistorialTemp([]);
-  setTendencia('estable');
-}
+        setHistorialTemp(prev => {
+          const nuevo = [...prev, data.max].slice(-20);
+          if (nuevo.length >= 20) {
+            const mitad = Math.floor(nuevo.length / 2);
+            const promReciente = nuevo.slice(mitad).reduce((a,b) => a+b,0) / mitad;
+            const promAnterior = nuevo.slice(0, mitad).reduce((a,b) => a+b,0) / mitad;
+            const diff = promReciente - promAnterior;
+            if (diff > 1.5) setTendencia('subiendo');
+            else if (diff < -1.5) setTendencia('bajando');
+            else setTendencia('estable');
+          }
+          return nuevo;
+        });
+      } else if (!data.bebeDetectado) {
+        setHistorialTemp([]);
+        setTendencia('estable');
+      }
       setUltimaLectura('hace unos segundos');
     });
 
-    // ── Escuchar ambiente ────────────────────────────────────────────
     const ambienteRef = ref(db, '/ambiente');
     const unsubAmbiente = onValue(ambienteRef, (snapshot) => {
       const data = snapshot.val();
-      if (!data) {
-        setAmbienteConectado(false);
-        return;
-      }
+      if (!data) { setAmbienteConectado(false); return; }
       setAmbienteConectado(true);
       setTemperatura(data.temperatura);
       setHumedad(data.humedad);
     });
 
-    // ── NUEVO: Escuchar IPs de cámaras ───────────────────────────────
     const camDiaRef   = ref(db, '/camera/dayIP');
     const camNocheRef = ref(db, '/camera/irIP');
     const unsubCamDia   = onValue(camDiaRef,   s => setCameraIp(s.val()));
@@ -190,8 +180,8 @@ export default function Monitor({route, navigation}) {
     return () => {
       unsubTermico();
       unsubAmbiente();
-      unsubCamDia();   // ← NUEVO
-      unsubCamNoche(); // ← NUEVO
+      unsubCamDia();
+      unsubCamNoche();
     };
   }, []);
 
@@ -218,8 +208,6 @@ export default function Monitor({route, navigation}) {
     ? { color: '#3a5a8a', bg: '#e8f0fa', emoji: '💧', texto: 'Muy húmedo' }
     : { color: Colors.successDark, bg: '#e8f4ee', emoji: '✓', texto: 'Humedad ideal' };
 
-  // ── Helper: HTML del stream ──────────────────────────────────────────
-  // ← NUEVO
   const streamHtml = (ip) =>
     `<html><body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;height:100vh">
       <img src="http://${ip}/" style="width:100%;height:100%;object-fit:contain">
@@ -239,7 +227,6 @@ export default function Monitor({route, navigation}) {
             </TouchableOpacity>
           </View>
 
-          {/* ── NUEVO: stream real si hay IP, placeholder si no ── */}
           {ipActiva ? (
             <WebView
               source={{ html: streamHtml(ipActiva) }}
@@ -263,7 +250,7 @@ export default function Monitor({route, navigation}) {
           <View style={styles.botonesGrandes}>
             <TouchableOpacity
               style={[styles.btnGrande, !modoIR && styles.btnGrandeActivoDia]}
-              onPress={() => setModoIR(false)}
+              onPress={() => activarModoIR(false)}
             >
               <Text style={styles.btnGrandeEmoji}>☀️</Text>
               <Text style={[styles.btnGrandeLabel, !modoIR && styles.btnGrandeLabelActivo]}>Día</Text>
@@ -271,7 +258,7 @@ export default function Monitor({route, navigation}) {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.btnGrande, modoIR && styles.btnGrandeActivoIR]}
-              onPress={() => setModoIR(true)}
+              onPress={() => activarModoIR(true)}
             >
               <Text style={styles.btnGrandeEmoji}>🌙</Text>
               <Text style={[styles.btnGrandeLabel, modoIR && styles.btnGrandeLabelActivoIR]}>Noche IR</Text>
@@ -300,19 +287,15 @@ export default function Monitor({route, navigation}) {
           ) : (
             <>
               <View style={{ width: '100%' }}>
-               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                {grid.map((color, i) => (
-                 <View
-                   key={i}
-                   style={{
-                      width: cellSize,
-                       height: cellSize,
-                       backgroundColor: color,
-                   }}
-                 />
-                ))}
-               </View>
-             </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {grid.map((color, i) => (
+                    <View
+                      key={i}
+                      style={{ width: cellSize, height: cellSize, backgroundColor: color }}
+                    />
+                  ))}
+                </View>
+              </View>
 
               <View style={styles.scaleBar}>
                 {['#b3d4ff','#99c8ff','#ffddaa','#ffaa66','#ff8833','#ff5500','#ff3300'].map((c, i) => (
@@ -373,9 +356,6 @@ export default function Monitor({route, navigation}) {
         onPress={() => setCamaraExpandida(true)}
         activeOpacity={0.9}
       >
-
-
-        {/* ── NUEVO: stream en miniatura si hay IP, placeholder si no ── */}
         {ipActiva ? (
           <View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }]} pointerEvents="none">
             <WebView
@@ -397,14 +377,13 @@ export default function Monitor({route, navigation}) {
             </Text>
           </View>
         )}
-
       </TouchableOpacity>
 
       {/* Botones modo cámara */}
       <View style={styles.botonesRow}>
         <TouchableOpacity
           style={[styles.btnModo, !modoIR && styles.btnModoActivoDia]}
-          onPress={() => setModoIR(false)}
+          onPress={() => activarModoIR(false)}
           activeOpacity={0.8}
         >
           <Text style={styles.btnModoEmoji}>☀️</Text>
@@ -415,7 +394,7 @@ export default function Monitor({route, navigation}) {
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.btnModo, modoIR && styles.btnModoActivoIR]}
-          onPress={() => setModoIR(true)}
+          onPress={() => activarModoIR(true)}
           activeOpacity={0.8}
         >
           <Text style={styles.btnModoEmoji}>🌙</Text>
@@ -577,14 +556,12 @@ export default function Monitor({route, navigation}) {
 const styles = StyleSheet.create({
   safe:                    { flex: 1, backgroundColor: Colors.bg },
 
-  // Sin conexión
   sinConexionCard:         { backgroundColor: Colors.bgCard, borderRadius: 16, borderWidth: 1, borderColor: Colors.brownPale, padding: 24 },
   sinConexionWrap:         { alignItems: 'center', gap: 8, paddingVertical: 16 },
   sinConexionEmoji:        { fontSize: 36 },
   sinConexionTitulo:       { fontSize: 16, fontWeight: '500', color: Colors.brown },
   sinConexionSub:          { fontSize: 13, color: Colors.textSecondary, textAlign: 'center', lineHeight: 20 },
 
-  // Cámara
   camaraBox:               { height: 220, backgroundColor: '#1a1410', justifyContent: 'center', alignItems: 'center', position: 'relative' },
   camaraBoxIR:             { backgroundColor: '#070f07' },
   camaraPlaceholder:       { alignItems: 'center', gap: 8 },
@@ -600,7 +577,6 @@ const styles = StyleSheet.create({
   bebeDetectadoDot:        { width: 6, height: 6, borderRadius: 3, backgroundColor: '#b5d8a8' },
   bebeDetectadoText:       { fontSize: 13, color: '#b5d8a8', fontWeight: '500' },
 
-  // Botones modo
   botonesRow:              { flexDirection: 'row', gap: 10, padding: 12, paddingBottom: 6 },
   btnModo:                 { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.bgCard, borderRadius: 14, borderWidth: 1.5, borderColor: Colors.brownPale, padding: 12 },
   btnModoActivoDia:        { borderColor: Colors.brownLight, backgroundColor: Colors.bgSurface },
@@ -613,22 +589,19 @@ const styles = StyleSheet.create({
   btnModoSubActivo:        { color: Colors.textSecondary },
   btnModoSubActivoIR:      { color: '#44aa44' },
 
-  // Scroll
   scroll:                  { flex: 1 },
   scrollContent:           { padding: 12, gap: 10, paddingBottom: 90 },
 
-  // Sección header
   seccionHeader:           { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
   seccionTitulo:           { fontSize: 15, fontWeight: '500', color: Colors.brown },
   infoBadge:               { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Colors.bgSurface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 },
   infoIcon:                { fontSize: 13, color: Colors.brownLight },
   infoText:                { fontSize: 12, color: Colors.brownMid },
 
-  // Térmico card
   termicoCard:             { backgroundColor: Colors.bgCard, borderRadius: 16, borderWidth: 1, borderColor: Colors.brownPale, padding: 14, marginBottom: 4 },
   termicoBody:             { flexDirection: 'row', gap: 14, alignItems: 'center', marginBottom: 10 },
-  gridMini:   { flexDirection: 'row', flexWrap: 'wrap', gap: 0, width: 136 },
-  cellMini:   { width: 4.25, height: 4.25, borderRadius: 0 },
+  gridMini:                { flexDirection: 'row', flexWrap: 'wrap', gap: 0, width: 136 },
+  cellMini:                { width: 4.25, height: 4.25, borderRadius: 0 },
   termicoInfo:             { flex: 1, gap: 8 },
   bebeChip:                { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 99, alignSelf: 'flex-start' },
   bebeChipDot:             { width: 6, height: 6, borderRadius: 3 },
@@ -640,7 +613,6 @@ const styles = StyleSheet.create({
   ultimaLecturaText:       { fontSize: 11, color: Colors.textTertiary },
   expandirText:            { fontSize: 12, color: Colors.brownLight, textAlign: 'right' },
 
-  // Ambiente card
   ambienteCard:            { backgroundColor: Colors.bgCard, borderRadius: 16, borderWidth: 1, borderColor: Colors.brownPale, padding: 16, gap: 12 },
   ambienteCardTop:         { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   ambienteCardTitulo:      { fontSize: 15, fontWeight: '500', color: Colors.brown },
@@ -658,7 +630,6 @@ const styles = StyleSheet.create({
   barraLabel:              { fontSize: 11, color: Colors.textTertiary },
   barraLabelIdeal:         { fontSize: 11, fontWeight: '500' },
 
-  // Modal
   modalOverlay:            { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard:               { backgroundColor: Colors.bgCard, borderRadius: 20, padding: 24, gap: 14, width: '100%' },
   modalTitulo:             { fontSize: 17, fontWeight: '500', color: Colors.brown },
@@ -666,15 +637,14 @@ const styles = StyleSheet.create({
   modalBtn:                { backgroundColor: Colors.yellow, borderRadius: 12, padding: 14, alignItems: 'center' },
   modalBtnText:            { fontSize: 15, fontWeight: '500', color: Colors.brown },
 
-  // Expandido
   expandedHeader:          { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   expandedTitle:           { fontSize: 22, fontWeight: '500', color: '#e8c99a' },
   cerrarBtn:               { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 99 },
   cerrarText:              { fontSize: 14, color: 'rgba(255,255,255,0.6)' },
   camaraExpandida:         { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  expandedContainer: { flex: 1, padding: 16, paddingBottom: 20 },
-  expandedGrid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 0, width: '100%' },
-  cellGrande:        { width: '3.125%', aspectRatio: 1, borderRadius: 0 },
+  expandedContainer:       { flex: 1, padding: 16, paddingBottom: 20 },
+  expandedGrid:            { flexDirection: 'row', flexWrap: 'wrap', gap: 0, width: '100%' },
+  cellGrande:              { width: '3.125%', aspectRatio: 1, borderRadius: 0 },
   scaleBar:                { flexDirection: 'row', height: 6, borderRadius: 4, overflow: 'hidden' },
   scaleCell:               { flex: 1 },
   scaleLabels:             { flexDirection: 'row', justifyContent: 'space-between' },
@@ -686,7 +656,6 @@ const styles = StyleSheet.create({
   expandedDisclaimer:      { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: 12 },
   expandedDisclaimerText:  { fontSize: 12, color: 'rgba(255,255,255,0.35)', textAlign: 'center', lineHeight: 18 },
 
-  // Botones grandes
   botonesGrandes:          { flexDirection: 'row', gap: 12 },
   btnGrande:               { flex: 1, alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', padding: 16 },
   btnGrandeActivoDia:      { borderColor: 'rgba(255,255,255,0.4)', backgroundColor: 'rgba(255,255,255,0.12)' },
