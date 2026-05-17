@@ -11,7 +11,7 @@ import Svg, { Polyline, Line, Rect, Text as SvgText } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   getDatabase, ref, onValue,
-  query, orderByChild, limitToLast,
+  query, orderByChild, orderByKey, limitToLast,
 } from 'firebase/database';
 import Colors from '../constants/colors';
 
@@ -63,9 +63,10 @@ const getTipoMeta = (tipo) => {
 };
 
 const ALERTA_META = {
-  llanto:      { color: C.infoText,   bg: C.infoBg   },  // 🔵 azul
-  temperatura: { color: C.naranjaText, bg: C.naranjaBg }, // 🟠 naranja
-  ambiente:    { color: C.dangerText,  bg: C.dangerBg  }, // 🔴 rojo
+  llanto:      { color: C.infoText,    bg: C.infoBg    },  // 🔵 azul
+  temperatura: { color: C.naranjaText, bg: C.naranjaBg },  // 🟠 naranja
+  ambiente:    { color: C.dangerText,  bg: C.dangerBg  },  // 🔴 rojo
+  sistema:     { color: C.successText, bg: C.successBg },  // 🟢 verde
 };
 
 const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
@@ -74,14 +75,14 @@ const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','d
 const offsetToIso = (offset) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
 const isoToLabel = (iso) => {
-  const hoy  = new Date().toISOString().slice(0, 10);
-  const ayer = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10);
-  })();
+  const local = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hoy  = local(new Date());
+  const ayer = local(new Date(Date.now() - 86400000));
   if (iso === hoy)  return 'hoy';
   if (iso === ayer) return 'ayer';
   const d = new Date(iso + 'T12:00:00');
@@ -167,7 +168,8 @@ const useAmbienteHistory = ({ desde, hasta }) => {
 
   useEffect(() => {
     const db = getDatabase();
-    const r  = ref(db, '/historial/ambiente');
+    // 8 640 entradas = 30 días a 1 entrada cada 5 min — evita cargar todo el historial
+    const r  = query(ref(db, '/historial/ambiente'), orderByKey(), limitToLast(8640));
     return onValue(r, (snap) => {
       if (!snap.exists()) { setPuntosTemp([]); setPuntosHum([]); return; }
       const entries = Object.values(snap.val())
@@ -602,7 +604,7 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
     <ScrollView contentContainerStyle={s.tabContent}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={s.filtrosRowH}>
-          {['todos', 'llanto', 'temperatura', 'ambiente'].map(f => (
+          {['todos', 'llanto', 'temperatura', 'ambiente', 'sistema'].map(f => (
             <TouchableOpacity key={f}
               style={[s.filtroBtn, { backgroundColor: filtro === f ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
               onPress={() => setFiltro(f)}>

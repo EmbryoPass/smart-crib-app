@@ -28,18 +28,19 @@ const useNombreCuidador = () => {
 };
 
 // ─── Hook: estado de cámaras ───────────────────────────────────────────────
-const useCamaras = () => {
-  const [dayIP, setDayIP] = useState(null);
-  const [irIP,  setIrIP ] = useState(null);
+// ─── Hook: voltajes desde Firebase ────────────────────────────────────────
+const useVoltajes = () => {
+  const [fuente, setFuente] = useState(null);
+  const [pila,   setPila  ] = useState(null);
 
   useEffect(() => {
     const db = getDatabase();
-    const u1 = onValue(ref(db, '/camera/dayIP'), s => setDayIP(s.val()));
-    const u2 = onValue(ref(db, '/camera/irIP'),  s => setIrIP(s.val()));
+    const u1 = onValue(ref(db, '/voltajes/fuente29V'), s => setFuente(s.val()));
+    const u2 = onValue(ref(db, '/voltajes/pila12V'),   s => setPila(s.val()));
     return () => { u1(); u2(); };
   }, []);
 
-  return { dayIP, irIP };
+  return { fuente, pila };
 };
 
 // ─── Componentes ──────────────────────────────────────────────────────────
@@ -64,8 +65,8 @@ export default function Ajustes() {
   const [nombre, setNombre]     = useNombreCuidador();
   const [editando, setEditando] = useState(false);
   const [borrador, setBorrador] = useState('');
-  const { termicoConectado }    = useSensor();
-  const { dayIP, irIP }         = useCamaras();
+  const { cameraIp, cameraIpIR, enBateria } = useSensor();
+  const { fuente, pila } = useVoltajes();
 
   const email = auth.currentUser?.email ?? '—';
 
@@ -161,24 +162,51 @@ export default function Ajustes() {
         <SeccionTitulo texto="dispositivo" />
         <View style={s.card}>
           <InfoRow
-            icono="hardware-chip-outline"
-            label="ESP32"
-            valor={termicoConectado ? 'conectado' : 'sin conexión'}
-            valorColor={termicoConectado ? Colors.successDark : Colors.dangerDark}
-          />
-          <View style={s.divider} />
-          <InfoRow
             icono="sunny-outline"
             label="cámara día"
-            valor={dayIP ?? 'sin señal'}
-            valorColor={dayIP ? Colors.textSecondary : Colors.textTertiary}
+            valor={cameraIp ?? 'sin señal'}
+            valorColor={cameraIp ? Colors.textSecondary : Colors.textTertiary}
           />
           <View style={s.divider} />
           <InfoRow
             icono="moon-outline"
             label="cámara IR"
-            valor={irIP ?? 'sin señal'}
-            valorColor={irIP ? Colors.textSecondary : Colors.textTertiary}
+            valor={cameraIpIR ?? 'sin señal'}
+            valorColor={cameraIpIR ? Colors.textSecondary : Colors.textTertiary}
+          />
+        </View>
+
+        {/* ── Energía ── */}
+        <SeccionTitulo texto="energía" />
+        <View style={s.card}>
+          <InfoRow
+            icono={enBateria ? 'battery-half-outline' : 'flash-outline'}
+            label="fuente"
+            valor={enBateria ? 'batería' : 'corriente'}
+            valorColor={enBateria ? '#B85C00' : Colors.successDark}
+          />
+          <View style={s.divider} />
+          <InfoRow
+            icono="flash-outline"
+            label="voltaje fuente"
+            valor={fuente != null ? `${fuente.toFixed(1)} V` : '— V'}
+            valorColor={
+              fuente == null ? Colors.textTertiary
+              : fuente < 5   ? '#C05050'
+              : Colors.textSecondary
+            }
+          />
+          <View style={s.divider} />
+          <InfoRow
+            icono="battery-charging-outline"
+            label="voltaje batería"
+            valor={pila != null ? `${pila.toFixed(1)} V` : '— V'}
+            valorColor={
+              pila == null  ? Colors.textTertiary
+              : pila < 11   ? '#C05050'
+              : pila < 11.5 ? '#B85C00'
+              : Colors.textSecondary
+            }
           />
         </View>
 

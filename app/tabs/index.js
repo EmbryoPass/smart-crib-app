@@ -127,6 +127,7 @@ export default function Inicio() {
     tempBebe, bebeDetectado, termicoConectado,
     temperatura, humedad,
     llantoActivo, ultimoLlanto,
+    enBateria,
   } = useSensor();
 
   const llantosHoy = useLlantosHoy();
@@ -337,6 +338,43 @@ export default function Inicio() {
             </View>
           </View>
           <Ionicons name="chevron-forward" size={18} color={Colors.textTertiary} />
+        </TouchableOpacity>
+
+        {/* ── Estado de energía ── */}
+        <TouchableOpacity
+          activeOpacity={0.85}
+          onPress={() => navigation.navigate('historial', { tab: 'alertas', filtro: 'sistema' })}
+          style={[
+            styles.llantoCard,
+            {
+              backgroundColor: enBateria ? '#FEF0E0' : Colors.bgCard,
+              borderWidth: enBateria ? 1.5 : 0,
+              borderColor: enBateria ? '#B85C00' : 'transparent',
+            },
+          ]}
+        >
+          <View style={styles.llantoLeft}>
+            <Ionicons
+              name={enBateria ? 'battery-half-outline' : 'flash-outline'}
+              size={18}
+              color={enBateria ? '#B85C00' : Colors.brown}
+            />
+            <View>
+              <Text style={[styles.llantoTitulo, { color: enBateria ? '#B85C00' : Colors.brown }]}>
+                {enBateria ? 'funcionando con batería' : 'corriente eléctrica'}
+              </Text>
+              <Text style={[styles.llantoSub, { color: enBateria ? '#B85C00' : Colors.textTertiary }]}>
+                {enBateria
+                  ? 'se fue la luz · cámaras apagadas para ahorrar batería'
+                  : 'todo normal · toca para ver historial'}
+              </Text>
+            </View>
+          </View>
+          <Ionicons
+            name="chevron-forward"
+            size={18}
+            color={enBateria ? '#B85C00' : Colors.textTertiary}
+          />
         </TouchableOpacity>
 
         <View style={{ height: 40 }} />
