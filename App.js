@@ -3,8 +3,10 @@ import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
+import { onAuthStateChanged } from 'firebase/auth';
 
 import Colors from './app/constants/colors';
+import { auth } from './app/constants/firebase';
 import { SensorProvider, useSensor } from './app/constants/SensorContext';
 import AlertaAmbienteBanner from './app/components/AlertaAmbienteBanner';
 import Inicio from './app/tabs/index';
@@ -143,6 +145,17 @@ function Banners() {
 
 export default function App() {
   const [usuario, setUsuario] = useState(null);
+
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUsuario({ nombre: user.displayName, email: user.email, uid: user.uid });
+      } else {
+        setUsuario(null);
+      }
+    });
+    return unsub;
+  }, []);
 
   if (!usuario) {
     return <InicioSesion onAuthSuccess={(datos) => setUsuario(datos)} />;
