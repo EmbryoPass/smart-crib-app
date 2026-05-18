@@ -273,21 +273,9 @@ export default function Monitor({route, navigation}) {
 
               <View style={styles.expandedStats}>
                 <View style={styles.expandedStat}>
-                  <Text style={styles.expandedStatLabel}>bebé</Text>
-                  <Text style={[styles.expandedStatVal, { color: bebeDetectado ? '#b5d8a8' : '#f4c2c2' }]}>
-                    {bebeDetectado ? 'detectado' : 'no detectado'}
-                  </Text>
-                </View>
-                <View style={styles.expandedStat}>
                   <Text style={styles.expandedStatLabel}>zona caliente</Text>
                   <Text style={[styles.expandedStatVal, { color: tendenciaConfig.color }]}>
                     ~{tempBebe}°C {tendenciaConfig.emoji}
-                  </Text>
-                </View>
-                <View style={styles.expandedStat}>
-                  <Text style={styles.expandedStatLabel}>tendencia</Text>
-                  <Text style={[styles.expandedStatVal, { color: tendenciaConfig.color }]}>
-                    {tendenciaConfig.texto}
                   </Text>
                 </View>
               </View>
@@ -403,22 +391,10 @@ export default function Monitor({route, navigation}) {
                 ))}
               </View>
               <View style={styles.termicoInfo}>
-                <View style={[styles.bebeChip, { backgroundColor: bebeDetectado ? '#e8f4ee' : '#fdecea' }]}>
-                  <View style={[styles.bebeChipDot, { backgroundColor: bebeDetectado ? Colors.successDark : Colors.dangerDark }]} />
-                  <Text style={[styles.bebeChipText, { color: bebeDetectado ? Colors.successDark : Colors.dangerDark }]}>
-                    {bebeDetectado ? 'bebé en cuna' : 'bebé no detectado'}
-                  </Text>
-                </View>
                 <View style={styles.tempBebeFila}>
                   <Text style={styles.tempBebeLabel}>zona caliente</Text>
                   <Text style={[styles.tempBebeVal, { color: tendenciaConfig.color }]}>
                     ~{tempBebe}°C {tendenciaConfig.emoji}
-                  </Text>
-                </View>
-                <View style={styles.tempBebeFila}>
-                  <Text style={styles.tempBebeLabel}>tendencia</Text>
-                  <Text style={[styles.tempBebeTendencia, { color: tendenciaConfig.color }]}>
-                    {tendenciaConfig.texto}
                   </Text>
                 </View>
               </View>
