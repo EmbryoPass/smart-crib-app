@@ -11,7 +11,7 @@ import Svg, { Polyline, Line, Rect, Text as SvgText } from 'react-native-svg';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   getDatabase, ref, onValue,
-  query, orderByChild, orderByKey, limitToLast,
+  query, orderByChild, limitToLast,
 } from 'firebase/database';
 import Colors from '../constants/colors';
 
@@ -63,10 +63,9 @@ const getTipoMeta = (tipo) => {
 };
 
 const ALERTA_META = {
-  llanto:      { color: C.infoText,    bg: C.infoBg    },  // 🔵 azul
-  temperatura: { color: C.naranjaText, bg: C.naranjaBg },  // 🟠 naranja
-  ambiente:    { color: C.dangerText,  bg: C.dangerBg  },  // 🔴 rojo
-  sistema:     { color: C.successText, bg: C.successBg },  // 🟢 verde
+  llanto:      { color: C.infoText,   bg: C.infoBg   },  // 🔵 azul
+  temperatura: { color: C.naranjaText, bg: C.naranjaBg }, // 🟠 naranja
+  ambiente:    { color: C.dangerText,  bg: C.dangerBg  }, // 🔴 rojo
 };
 
 const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
@@ -168,8 +167,7 @@ const useAmbienteHistory = ({ desde, hasta }) => {
 
   useEffect(() => {
     const db = getDatabase();
-    // 8 640 entradas = 30 días a 1 entrada cada 5 min — evita cargar todo el historial
-    const r  = query(ref(db, '/historial/ambiente'), orderByKey(), limitToLast(8640));
+    const r  = ref(db, '/historial/ambiente');
     return onValue(r, (snap) => {
       if (!snap.exists()) { setPuntosTemp([]); setPuntosHum([]); return; }
       const entries = Object.values(snap.val())
@@ -604,7 +602,7 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
     <ScrollView contentContainerStyle={s.tabContent}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={s.filtrosRowH}>
-          {['todos', 'llanto', 'temperatura', 'ambiente', 'sistema'].map(f => (
+          {['todos', 'llanto', 'temperatura', 'ambiente'].map(f => (
             <TouchableOpacity key={f}
               style={[s.filtroBtn, { backgroundColor: filtro === f ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
               onPress={() => setFiltro(f)}>
