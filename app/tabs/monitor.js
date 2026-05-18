@@ -104,6 +104,7 @@ export default function Monitor({route, navigation}) {
     tempBebe, bebeDetectado, tendencia,
     temperatura, humedad,
     termicoConectado, ambienteConectado,
+    cameraIp, cameraIpIR,
   } = useSensor();
 
   // ── Estado local de esta pantalla ─────────────────────────────────────
@@ -115,8 +116,6 @@ export default function Monitor({route, navigation}) {
   // ── Estado Firebase exclusivo de Monitor ──────────────────────────────
   const [grid, setGrid] = useState(Array(64).fill('#b3d4ff'));
   const [ultimaLectura, setUltimaLectura] = useState('--');
-  const [cameraIp, setCameraIp]     = useState(null);
-  const [cameraIpIR, setCameraIpIR] = useState(null);
 
   // ── Activar/desactivar LED IR desde app ──────────────────────────────
   const activarModoIR = (activo) => {
@@ -143,17 +142,10 @@ export default function Monitor({route, navigation}) {
       setUltimaLectura('hace unos segundos');
     });
 
-    // /ambiente lo maneja SensorContext — no necesitamos listener aquí
-
-    const camDiaRef   = ref(db, '/camera/dayIP');
-    const camNocheRef = ref(db, '/camera/irIP');
-    const unsubCamDia   = onValue(camDiaRef,   s => setCameraIp(s.val()));
-    const unsubCamNoche = onValue(camNocheRef, s => setCameraIpIR(s.val()));
+    // /ambiente y /camera/* los maneja SensorContext — no necesitamos listeners aquí
 
     return () => {
       unsubTermico();
-      unsubCamDia();
-      unsubCamNoche();
     };
   }, []);
 

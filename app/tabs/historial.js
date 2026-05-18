@@ -74,14 +74,14 @@ const MS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','d
 const offsetToIso = (offset) => {
   const d = new Date();
   d.setDate(d.getDate() + offset);
-  return d.toISOString().slice(0, 10);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
 const isoToLabel = (iso) => {
-  const hoy  = new Date().toISOString().slice(0, 10);
-  const ayer = (() => {
-    const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().slice(0, 10);
-  })();
+  const local = (d) =>
+    `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const hoy  = local(new Date());
+  const ayer = local(new Date(Date.now() - 86400000));
   if (iso === hoy)  return 'hoy';
   if (iso === ayer) return 'ayer';
   const d = new Date(iso + 'T12:00:00');
