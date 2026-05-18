@@ -180,10 +180,10 @@ export default function Ajustes() {
         <SeccionTitulo texto="energía" />
         <View style={s.card}>
           <InfoRow
-            icono={enBateria ? 'battery-half-outline' : 'flash-outline'}
+            icono={fuente != null && fuente < 5 ? 'battery-half-outline' : 'flash-outline'}
             label="fuente"
-            valor={enBateria ? 'batería' : 'corriente'}
-            valorColor={enBateria ? '#B85C00' : Colors.successDark}
+            valor={fuente == null ? '—' : fuente < 5 ? 'batería' : 'corriente'}
+            valorColor={fuente != null && fuente < 5 ? '#B85C00' : Colors.successDark}
           />
           <View style={s.divider} />
           <InfoRow

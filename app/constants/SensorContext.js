@@ -111,7 +111,7 @@ const getSoloTempConfig = (zonaT, t, minutos) => {
   const configs = {
     frio_critico: {
       titulo: 'El cuarto está muy frío',
-      cuerpo: `Está a ${T}°C — caliéntalo de inmediato. Abriga al bebé sin cubrirle la cara.`,
+      cuerpo: `Está a ${T}°C — Abriga al bebé y calienta el cuarto.`,
     },
     frio: {
       titulo: 'El cuarto está frío',
@@ -142,7 +142,7 @@ const getSoloHumConfig = (zonaH, h) => {
     },
     seco: {
       titulo: 'El cuarto está algo seco',
-      cuerpo: `${H}% de humedad — considera un humidificador o poner un vaso de agua cerca.`,
+      cuerpo: `${H}% de humedad — considera un humidificador.`,
     },
     humedo: {
       titulo: 'El cuarto está algo húmedo',
@@ -174,13 +174,13 @@ const getComboConfig = (zonaT, zonaH, t, h) => {
     if (critico) return {
       severity: 'critico',
       titulo:   '¡El cuarto está muy caliente y húmedo!',
-      cuerpo:   `${T}°C y ${H}% — el bebé puede sofocarse. Ventila de inmediato y no le pongas más ropa.`,
+      cuerpo:   `${T}°C y ${H}% — el bebé puede sofocarse. ventila de inmediato y no le pongas más ropa.`,
       debounce: 0,          cooldown: 5 * 60000,
     };
     if (moderado) return {
       severity: 'moderado',
       titulo:   'El cuarto está caliente y húmedo',
-      cuerpo:   `${T}°C y ${H}% — el bebé se calienta más rápido en estas condiciones. Ventila el cuarto.`,
+      cuerpo:   `${T}°C y ${H}% — el bebé se calienta más rápido en estas condiciones. ventila el cuarto.`,
       debounce: 3 * 60000,  cooldown: 15 * 60000,
     };
     return {
@@ -199,13 +199,13 @@ const getComboConfig = (zonaT, zonaH, t, h) => {
     if (critico) return {
       severity: 'critico',
       titulo:   '¡El cuarto está muy caliente y seco!',
-      cuerpo:   `${T}°C y ${H}% — ventila de inmediato y pon un humidificador. El bebé puede deshidratarse muy rápido en estas condiciones.`,
+      cuerpo:   `${T}°C y ${H}% — ventila de inmediato y pon un humidificador. el bebé puede deshidratarse muy rápido en estas condiciones.`,
       debounce: 0,          cooldown: 5 * 60000,
     };
     if (moderado) return {
       severity: 'moderado',
       titulo:   'El cuarto está caliente y seco',
-      cuerpo:   `${T}°C y ${H}% — el bebé puede deshidratarse más rápido. Ventila y añade algo de humedad al cuarto.`,
+      cuerpo:   `${T}°C y ${H}% — el bebé puede deshidratarse más rápido. ventila un poco y considera un humidificador.`,
       debounce: 3 * 60000,  cooldown: 15 * 60000,
     };
     return {
@@ -223,19 +223,19 @@ const getComboConfig = (zonaT, zonaH, t, h) => {
     if (critico) return {
       severity: 'critico',
       titulo:   '¡El cuarto está muy frío y húmedo!',
-      cuerpo:   `${T}°C y ${H}% — caliéntalo de inmediato. Abriga al bebé y calienta el cuarto.`,
+      cuerpo:   `${T}°C y ${H}% — caliéntalo de inmediato. abriga al bebé y calienta el cuarto.`,
       debounce: 0,          cooldown: 10 * 60000,
     };
     if (moderado) return {
       severity: 'moderado',
       titulo:   'El cuarto está frío y húmedo',
-      cuerpo:   `${T}°C y ${H}% — el bebé pierde calor más rápido en estas condiciones. Calienta el cuarto.`,
+      cuerpo:   `${T}°C y ${H}% — el bebé pierde calor más rápido en estas condiciones. calienta el cuarto.`,
       debounce: 5 * 60000,  cooldown: 20 * 60000,
     };
     return {
       severity: 'leve',
       titulo:   'El cuarto está frío y algo húmedo',
-      cuerpo:   `${T}°C y ${H}% — el frío se siente más cuando hay humedad. Abriga bien al bebé.`,
+      cuerpo:   `${T}°C y ${H}% — el frío se siente más cuando hay humedad. abriga bien al bebé.`,
       debounce: 10 * 60000, cooldown: 30 * 60000,
     };
   }
@@ -253,13 +253,13 @@ const getComboConfig = (zonaT, zonaH, t, h) => {
     if (moderado) return {
       severity: 'moderado',
       titulo:   'El cuarto está frío y muy seco',
-      cuerpo:   `${T}°C y ${H}% — puede irritar la nariz y garganta del bebé. Calienta el cuarto y añade humedad.`,
+      cuerpo:   `${T}°C y ${H}% — puede irritar la nariz y garganta del bebé. calienta el cuarto y humidifica.`,
       debounce: 5 * 60000,  cooldown: 20 * 60000,
     };
     return {
       severity: 'leve',
       titulo:   'El cuarto está frío y algo seco',
-      cuerpo:   `${T}°C y ${H}% — puede resecar la nariz del bebé. Calienta el cuarto y pon un humidificador.`,
+      cuerpo:   `${T}°C y ${H}% — puede resecar la nariz del bebé. calienta el cuarto y pon un humidificador.`,
       debounce: 10 * 60000, cooldown: 30 * 60000,
     };
   }
@@ -280,6 +280,13 @@ export function SensorProvider({ children }) {
   const [temperatura, setTemperatura]             = useState(null);
   const [humedad, setHumedad]                     = useState(null);
   const [ambienteConectado, setAmbienteConectado] = useState(false);
+
+  // ── IPs de cámara ─────────────────────────────────────────────────────
+  const [cameraIp,   setCameraIp  ] = useState(null);
+  const [cameraIpIR, setCameraIpIR] = useState(null);
+
+  // ── Estado del sistema de energía ─────────────────────────────────────
+  const [enBateria, setEnBateria] = useState(false);
 
   // ── Estado llanto ──────────────────────────────────────────────────────
   const [llantoActivo, setLlantoActivo]   = useState(false);
@@ -590,6 +597,21 @@ export function SensorProvider({ children }) {
     return () => { unsubTermico(); unsubAmbiente(); unsubLlanto(); };
   }, [checkAmbiente]);
 
+  // ── IPs de cámara ─────────────────────────────────────────────────────
+  useEffect(() => {
+    const u1 = onValue(ref(db, '/camera/dayIP'), s => setCameraIp(s.val()));
+    const u2 = onValue(ref(db, '/camera/irIP'),  s => setCameraIpIR(s.val()));
+    return () => { u1(); u2(); };
+  }, []);
+
+  // ── Estado del sistema de energía ─────────────────────────────────────
+  useEffect(() => {
+    const unsub = onValue(ref(db, '/sistema/enBateria'), (snap) => {
+      setEnBateria(snap.val() === true);
+    });
+    return unsub;
+  }, []);
+
   // ── Estadísticas ──────────────────────────────────────────────────────
   const entriasPorRango = (horas) => {
     const desde = Date.now() - horas * 3600 * 1000;
@@ -646,6 +668,10 @@ export function SensorProvider({ children }) {
     // Tiempo real
     tempBebe, bebeDetectado, tendencia, termicoConectado,
     temperatura, humedad, ambienteConectado,
+    // Cámaras
+    cameraIp, cameraIpIR,
+    // Sistema de energía
+    enBateria,
     // Llanto
     llantoActivo, ultimoLlanto, llantoHoy,
     // Historial

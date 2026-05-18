@@ -63,6 +63,19 @@ const useLlantosHoy = () => {
   return count;
 };
 
+// ─── Hook: voltajes desde Firebase ────────────────────────────────────────
+const useVoltajes = () => {
+  const [fuente, setFuente] = useState(null);
+
+  useEffect(() => {
+    const db = getDatabase();
+    const u1 = onValue(ref(db, '/voltajes/fuente29V'), s => setFuente(s.val()));
+    return () => { u1(); };
+  }, []);
+
+  return { fuente };
+};
+
 // ─── Dot animado — verde para live, rojo para alerta ──────────────────────
 const PulseDot = ({ color }) => {
   const pulse = useRef(new Animated.Value(1)).current;
@@ -127,10 +140,11 @@ export default function Inicio() {
     tempBebe, bebeDetectado, termicoConectado,
     temperatura, humedad,
     llantoActivo, ultimoLlanto,
-    enBateria,
   } = useSensor();
 
-  const llantosHoy = useLlantosHoy();
+  const llantosHoy      = useLlantosHoy();
+  const { fuente }      = useVoltajes();
+  const sinFuente       = fuente != null && fuente < 5;
 
   const tempFueraDeRango    = temperatura != null && (temperatura < 18 || temperatura > 22);
   const humedadFueraDeRango = humedad     != null && (humedad < 40     || humedad > 60);
@@ -172,32 +186,6 @@ export default function Inicio() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-
-        {/* ── Hero: estado del bebé ── */}
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onPress={() => navigation.navigate('monitor')}
-          style={styles.heroCard}
-        >
-          <View style={styles.heroInfo}>
-            <View style={[styles.statusPill, { backgroundColor: estadoBg }]}>
-              {bebeDetectado && termicoConectado && (
-                <PulseDot color={Colors.successDark} />
-              )}
-              <Text style={[styles.statusText, { color: estadoColor }]}>{estadoLabel}</Text>
-            </View>
-
-            <Text style={styles.tempValue}>
-              {tempBebe != null ? `${tempBebe}` : '--'}
-              <Text style={styles.tempUnit}> °C</Text>
-            </Text>
-
-            <Text style={styles.tempSub}>
-              {bebeDetectado ? 'zona caliente' : 'toca para ver monitor'}
-            </Text>
-          </View>
-          <CunaIcon detected={bebeDetectado} />
-        </TouchableOpacity>
 
         {/* ── Ambiente y humedad ── */}
         <View style={styles.row}>
@@ -347,24 +335,24 @@ export default function Inicio() {
           style={[
             styles.llantoCard,
             {
-              backgroundColor: enBateria ? '#FEF0E0' : Colors.bgCard,
-              borderWidth: enBateria ? 1.5 : 0,
-              borderColor: enBateria ? '#B85C00' : 'transparent',
+              backgroundColor: sinFuente ? '#FEF0E0' : Colors.bgCard,
+              borderWidth: sinFuente ? 1.5 : 0,
+              borderColor: sinFuente ? '#B85C00' : 'transparent',
             },
           ]}
         >
           <View style={styles.llantoLeft}>
             <Ionicons
-              name={enBateria ? 'battery-half-outline' : 'flash-outline'}
+              name={sinFuente ? 'battery-half-outline' : 'flash-outline'}
               size={18}
-              color={enBateria ? '#B85C00' : Colors.brown}
+              color={sinFuente ? '#B85C00' : Colors.brown}
             />
             <View>
-              <Text style={[styles.llantoTitulo, { color: enBateria ? '#B85C00' : Colors.brown }]}>
-                {enBateria ? 'funcionando con batería' : 'corriente eléctrica'}
+              <Text style={[styles.llantoTitulo, { color: sinFuente ? '#B85C00' : Colors.brown }]}>
+                {sinFuente ? 'funcionando con batería' : 'corriente eléctrica'}
               </Text>
-              <Text style={[styles.llantoSub, { color: enBateria ? '#B85C00' : Colors.textTertiary }]}>
-                {enBateria
+              <Text style={[styles.llantoSub, { color: sinFuente ? '#B85C00' : Colors.textTertiary }]}>
+                {sinFuente
                   ? 'se fue la luz · cámaras apagadas para ahorrar batería'
                   : 'todo normal · toca para ver historial'}
               </Text>
@@ -373,7 +361,7 @@ export default function Inicio() {
           <Ionicons
             name="chevron-forward"
             size={18}
-            color={enBateria ? '#B85C00' : Colors.textTertiary}
+            color={sinFuente ? '#B85C00' : Colors.textTertiary}
           />
         </TouchableOpacity>
 
