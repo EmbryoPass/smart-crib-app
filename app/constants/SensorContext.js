@@ -5,7 +5,10 @@ const SensorContext = createContext(null);
 const MAX_HISTORIAL = 288;
 
 // ─── Utilidades de fecha ────────────────────────────────────────────────────
-const isoHoy = () => new Date().toISOString().slice(0, 10);
+const isoHoy = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 const fmtHora = (ts = Date.now()) => {
   const d = new Date(ts);
@@ -277,13 +280,6 @@ export function SensorProvider({ children }) {
   const [temperatura, setTemperatura]             = useState(null);
   const [humedad, setHumedad]                     = useState(null);
   const [ambienteConectado, setAmbienteConectado] = useState(false);
-
-  // ── IPs de cámara ─────────────────────────────────────────────────────
-  const [cameraIp,   setCameraIp  ] = useState(null);
-  const [cameraIpIR, setCameraIpIR] = useState(null);
-
-  // ── Estado del sistema de energía ─────────────────────────────────────
-  const [enBateria, setEnBateria] = useState(false);
 
   // ── Estado llanto ──────────────────────────────────────────────────────
   const [llantoActivo, setLlantoActivo]   = useState(false);
@@ -594,21 +590,6 @@ export function SensorProvider({ children }) {
     return () => { unsubTermico(); unsubAmbiente(); unsubLlanto(); };
   }, [checkAmbiente]);
 
-  // ── IPs de cámara (un solo listener central para toda la app) ─────────
-  useEffect(() => {
-    const u1 = onValue(ref(db, '/camera/dayIP'), s => setCameraIp(s.val()));
-    const u2 = onValue(ref(db, '/camera/irIP'),  s => setCameraIpIR(s.val()));
-    return () => { u1(); u2(); };
-  }, []);
-
-  // ── Estado del sistema de energía ─────────────────────────────────────
-  useEffect(() => {
-    const unsub = onValue(ref(db, '/sistema/enBateria'), (snap) => {
-      setEnBateria(snap.val() === true);
-    });
-    return unsub;
-  }, []);
-
   // ── Estadísticas ──────────────────────────────────────────────────────
   const entriasPorRango = (horas) => {
     const desde = Date.now() - horas * 3600 * 1000;
@@ -665,10 +646,6 @@ export function SensorProvider({ children }) {
     // Tiempo real
     tempBebe, bebeDetectado, tendencia, termicoConectado,
     temperatura, humedad, ambienteConectado,
-    // Cámaras
-    cameraIp, cameraIpIR,
-    // Sistema de energía
-    enBateria,
     // Llanto
     llantoActivo, ultimoLlanto, llantoHoy,
     // Historial

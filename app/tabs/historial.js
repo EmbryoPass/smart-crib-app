@@ -63,9 +63,10 @@ const getTipoMeta = (tipo) => {
 };
 
 const ALERTA_META = {
-  llanto:      { color: C.infoText,   bg: C.infoBg   },  // 🔵 azul
-  temperatura: { color: C.naranjaText, bg: C.naranjaBg }, // 🟠 naranja
-  ambiente:    { color: C.dangerText,  bg: C.dangerBg  }, // 🔴 rojo
+  llanto:      { color: C.infoText,    bg: C.infoBg    },  // 🔵 azul
+  temperatura: { color: C.naranjaText, bg: C.naranjaBg },  // 🟠 naranja
+  ambiente:    { color: C.dangerText,  bg: C.dangerBg  },  // 🔴 rojo
+  sistema:     { color: C.successText, bg: C.successBg },  // 🟢 verde
 };
 
 const DS = ['dom','lun','mar','mié','jue','vie','sáb'];
@@ -602,7 +603,7 @@ const AlertasTab = ({ filtroInicial = 'todos' }) => {
     <ScrollView contentContainerStyle={s.tabContent}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <View style={s.filtrosRowH}>
-          {['todos', 'llanto', 'temperatura', 'ambiente'].map(f => (
+          {['todos', 'llanto', 'temperatura', 'ambiente', 'sistema'].map(f => (
             <TouchableOpacity key={f}
               style={[s.filtroBtn, { backgroundColor: filtro === f ? Colors.brown : Colors.bgCard, borderColor: Colors.brownPale }]}
               onPress={() => setFiltro(f)}>
